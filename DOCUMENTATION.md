@@ -114,10 +114,10 @@ ldap_manager:
    passwd: admin
 
 admin:
-   uid: ddiorio
-   cn: Davi
-   sn: Diorio Mendes
-   mail: ddiorio@br.ibm.com
+   uid: admin
+   cn: Adilson
+   sn: Mindel
+   mail: admin@nowhere.com
    sha1_passwd: "{SSHA}bc7Wp5GU2tFgCL5cFt2N3/7pXkKvNH1g"
 
 django_secret_key: "@i3(5b7atjfu&*-%_7nxcdop_pfr(yf*m1g+b$(5-)sq$10=i"
