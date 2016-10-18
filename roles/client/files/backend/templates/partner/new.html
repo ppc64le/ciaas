@@ -1,0 +1,55 @@
+{% extends 'client/base.html' %}
+
+{% comment %}
+
+    Copyright IBM Corp, 2016
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+    implied. See the License for the specific language governing
+    permissions and limitations under the License.
+
+{% endcomment %}
+
+{% block title %}New Partner{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <h1><a href="{% url 'partner:list' %}"><i class="material-icons" style="font-size: 0.7em;">arrow_back</i></a>New Partner</h1>
+        <form method="POST">
+            {% csrf_token %}
+            {% for field in form %}
+            <div class="input-field row">
+                {{ field }}
+                {{ field.label_tag }}
+                {{ field.errors }}
+            </div>
+            {% endfor %}
+            <div class="input-field row">
+                <div class="col s12 m4">
+                    <input id="node_amount" name="node_amount" type="number" value="1" min="1">
+                    <label for="node_amount">How many nodes will provide?</label>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col s4 m2 offset-m7">
+                    <button type="reset" class="btn-large fill red" title="Reset form"><i class="material-icons">undo</i></button>
+                </div>
+                <div class="col s8 m3">
+                    <button type="submit" class="btn-large fill">SUBMIT</button>
+                </div>
+            </div>
+        </form>
+    </div>
+{% endblock %}
+
+{% comment %}
+    vim:set ft=htmldjango:
+{% endcomment %}

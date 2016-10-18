@@ -1,0 +1,291 @@
+# Copyright IBM Corp, 2016
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+
+---
+- name: Create jenkins directory
+  file: >
+    path=/var/powerci/jenkins
+    state=directory
+    owner=1000
+    group=1000
+
+- name: Create repo directory
+  file: >
+    path=/var/powerci/jenkins/repo
+    state=directory
+    owner=1000
+    group=1000
+
+- name: Checkout jenkins files
+  git: >
+    repo=https://github.com/jenkinsci/docker.git
+    dest=/var/powerci/jenkins/repo
+    version=1.617
+
+- name: Copy Jenkins files to context
+  copy: >
+    src=/var/powerci/jenkins/repo/{{ item.name }}
+    dest=/var/powerci/jenkins/{{ item.name }}
+    remote_src=True
+    owner=1000
+    group=1000
+    mode={{ item.mode }}
+  with_items:
+    - {name: 'Dockerfile',  mode: '0644'}
+    - {name: 'plugins.sh',  mode: '0755'}
+    - {name: 'jenkins.sh',  mode: '0755'}
+    - {name: 'init.groovy', mode: '0644'}
+
+- name: Copy jenkins plugins
+  copy: >
+    owner=1000
+    group=1000
+    src={{ item }}-plugin.txt
+    dest=/var/powerci/jenkins/{{ item }}-plugin.txt
+  with_items:
+    - cloudbees
+    - gearman
+    - git
+    - pipeline
+    - publish-over-ssh
+    - simple-travis-runner
+    - ssh-credentials
+  register: plugins
+
+- name: Remove jenkins plugins
+  file: >
+    path=/var/powerci/jenkins/{{ item }}-plugin.txt
+    state=absent
+  with_items:
+    - job-dsl
+    - docker
+  register: removed_plugins
+
+- name: Generate jenkins-plugins.txt
+  shell: cat /var/powerci/jenkins/*-plugin.txt | sort -u | grep -v \# > /var/powerci/jenkins/jenkins-plugins.txt && chown 1000:1000 /var/powerci/jenkins/jenkins-plugins.txt
+  when: plugins|changed or removed_plugins|changed
+
+- name: Copy ldap.conf
+  copy: >
+    owner=1000
+    group=1000
+    src=ldap.conf
+    dest=/var/powerci/jenkins/ldap.conf
+
+- name: Copy private ssh key
+  copy: >
+    owner=1000
+    group=1000
+    src=id_rsa
+    dest=/var/powerci/jenkins/id_rsa
+    mode=0600
+
+- name: Copy public ssh key
+  copy: >
+    owner=1000
+    group=1000
+    src=id_rsa.pub
+    dest=/var/powerci/jenkins/id_rsa.pub
+    mode=0644
+
+- name: Copy configure_credentials file
+  copy: >
+    src=configure_credentials.groovy
+    dest=/var/powerci/jenkins/configure_credentials.groovy
+    owner=1000
+    group=1000
+  register: credentials
+
+- name: Render configure_gearmand template
+  template: >
+    src=./roles/jenkins/templates/configure_gearman.groovy.j2
+    dest=/var/powerci/jenkins/configure_gearman.groovy
+    owner=1000
+    group=1000
+  register: gearmand
+
+- name: Render configure_ldap template
+  template: >
+    src=./roles/jenkins/templates/configure_ldap.groovy.j2
+    dest=/var/powerci/jenkins/configure_ldap.groovy
+    owner=1000
+    group=1000
+  register: ldap
+
+- name: Render configure_slave template
+  template: >
+    src=./roles/jenkins/templates/configure_slaves.groovy.j2
+    dest=/var/powerci/jenkins/configure_slaves.groovy
+    owner=1000
+    group=1000
+  register: slave
+
+- name: Patch Dockerfile
+  patch: >
+    src=Dockerfile.patch
+    dest=/var/powerci/jenkins/Dockerfile
+
+- name: Render docker-compose template
+  template: >
+    src=docker-compose.yml.j2
+    dest=/var/powerci/jenkins/docker-compose.yml
+    owner=1000
+    group=1000
+
+- name: Copy ca-chain certificate
+  copy: >
+    owner=1000
+    group=1000
+    src=./roles/ldap/files/ca-chain.cert.pem
+    dest=/var/powerci/jenkins/ca-chain.cert.pem
+    mode=0644
+
+- name: Check if jenkins is up
+  uri:
+    url: "http://{{ inventory_hostname }}:{{ jenkins_port }}/api/json"
+    method: GET
+  register: jenkins_status
+  failed_when: False
+  changed_when: False
+
+- name: Put jenkins in quiet shutdown
+  uri:
+    url: "http://{{ inventory_hostname }}:{{ jenkins_port }}/quietDown"
+    force_basic_auth: yes
+    user: "{{ admin_user }}"
+    password: "{{ admin_password }}"
+    method: GET
+  register: quiet_shutdown
+  until: quiet_shutdown|success
+  retries: 40
+  delay: 15
+  when: "'failed' not in jenkins_status"
+
+- name: Wait Jenkins queue empty
+  uri:
+    url: "http://localhost:8080/computer/api/json"
+    method: GET
+  register: jenkins_nodes
+  until: jenkins_nodes.json.busyExecutors == 0
+  retries: 360
+  delay: 5
+  when: "'failed' not in jenkins_status"
+
+- name: Capture files to remove
+  sudo: yes
+  shell: ls -la /var/lib/docker/volumes/jenkins_jenkins_home/_data/ | tail -n +4 | awk '{print "- "$9" "}' | grep -v plugins | grep -v jobs
+  register: files
+  when: slave|changed or gearmand|changed or ldap|changed or plugins|changed or removed_plugins|changed or credentials|changed
+  ignore_errors: true
+
+- name: Remove files
+  sudo: yes
+  file: >
+    path=/var/lib/docker/volumes/jenkins_jenkins_home/_data/{{ item }}
+    state=absent
+  with_items: "{{ files.stdout|from_yaml }}"
+  when: files|success and (slave|changed or gearmand|changed or ldap|changed or plugins|changed or removed_plugins|changed or credentials|changed)
+
+- name: Build jenkins image
+  docker_service:
+    project_src: "{{ image.path }}"
+    project_name: jenkins
+    build: yes
+    recreate: never
+
+- name: jenkins up
+  docker_service:
+    project_src: "{{ image.path }}"
+    project_name: jenkins
+    state: present
+    recreate: smart
+
+- name: Remove stopped containers
+  shell: docker rm `docker ps -q -f status=exited`
+  failed_when: False
+
+- name: Remove dangling images
+  shell: docker rmi `docker images -q -f dangling=true`
+  failed_when: False
+
+- name: Get Jenkins state
+  uri:
+    url: "http://{{ inventory_hostname }}:{{ jenkins_port }}/api/json"
+    method: GET
+  register: jenkins_state
+  until: jenkins_state|success
+  retries: 40
+  delay: 15
+
+- name: Get Jenkins crumb to POST actions
+  uri:
+    url: "http://{{ inventory_hostname }}:{{ jenkins_port }}/crumbIssuer/api/json"
+    force_basic_auth: yes
+    user: "{{ admin_user }}"
+    password: "{{ admin_password }}"
+    method: GET
+  register: crumb_request
+  until: crumb_request|success
+  retries: 40
+  delay: 15
+  when: jenkins_state.json.quietingDown
+
+- name: Cancel jenkins quiet shutdown
+  uri:
+    url: "http://{{ inventory_hostname }}:{{ jenkins_port }}/cancelQuietDown"
+    force_basic_auth: yes
+    user: "{{ admin_user }}"
+    password: "{{ admin_password }}"
+    method: POST
+    headers: .crumb={{ crumb_request.json.crumb }}
+    follow_redirects: all
+  when: jenkins_state.json.quietingDown
+
+- name: Request login page
+  uri:
+    url: "https://{{ using_client_host }}:{{ using_client_port }}/partner/register_node"
+    method: GET
+    validate_certs: no
+  register: response
+
+- name: Get csrftoken from cookies
+  set_fact: csrftoken={{ item[10:] }}
+  with_items: response.set_cookie.split(';')
+  when: item.find('csrftoken=') != -1
+
+- name: Remove `=` char from csrftoken if needed
+  set_fact: csrftoken={{ csrftoken[1:] }}
+  when: csrftoken.find('=') == 0
+
+- name: Find host token
+  set_fact: token={{ tokens[item|int] }}
+  with_sequence: >
+    start=0
+    count={{ groups.jenkins|length }}
+  when: groups.jenkins[item|int] == inventory_hostname
+
+- name: Register jenkins instance
+  uri:
+    url: "https://{{ using_client_host }}:{{ using_client_port }}/partner/register_node"
+    headers:
+      X-CSRFToken: "{{ csrftoken }}"
+      Content-Type: "application/json"
+      Cookie: "{{ response.set_cookie }}"
+      Referer: "https://{{ using_client_host }}:{{ using_client_port }}/partner/register_node"
+    method: POST
+    body_format: json
+    body: '{"token": "{{ token }}", "host": "{{ inventory_hostname }}", "port": "{{ jenkins_port }}", "csrfmiddlewaretoken": "{{ csrftoken }}"}'
+    validate_certs: no
+  register: output
+  ignore_errors: true

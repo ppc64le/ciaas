@@ -1,0 +1,131 @@
+{% extends 'account/base_signup.html' %}
+
+{% comment %}
+
+    Copyright IBM Corp, 2016
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+    implied. See the License for the specific language governing
+    permissions and limitations under the License.
+
+{% endcomment %}
+
+{% block signup_content %}
+<div class="container">
+    <div class="row">
+        <div class="col s12 m8 offset-m2 l6 offset-l3 z-depth-1">
+            <p class="center">Already have an account? <a href="{% url 'account:signin' %}">Sign in here!</a></p>
+            <form method="POST" style="padding: 1.2em">
+                {% csrf_token %}
+                <div>
+                    <label for="username" data-error="Use only alphanumeric characters, _ and - with no spaces." class="fill">Username</label>
+                    <input id="username" name="username" type="text" maxlength="30" required/>
+                </div>
+                <div>
+                    <label for="first_name">First Name</label>
+                    <input id="first_name" name="first_name" type="text" maxlength="30" required/>
+                </div>
+                <div>
+                    <label for="last_name">Last Name</label>
+                    <input id="last_name" name="last_name" type="text" maxlength="30" required/>
+                </div>
+                <div>
+                    <label for="email" data-error="Please, enter a valid e-mail">E-mail</label>
+                    <input id="email" name="email" type="email" maxlength="30" class="validate" required/>
+                </div>
+                <div>
+                    <label for="password" class="fill">Password</label>
+                    <input id="password" name="password" type="password" maxlength="30" required/>
+                </div>
+                <div>
+                    <label for="confirm_password" class="fill">Confirm Password</label>
+                    <input id="confirm_password" name="confirm_password" type="password" maxlength="30" required/>
+                </div>
+                <div>
+                    <input type="submit" value="SUBMIT" class="btn-large fill"/>
+                </div>
+            </form>
+            <p class="center">Already have an account? <a href="{% url 'account:signin' %}">Sign in here!</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block footer_scripts %}
+<script type="text/javascript">
+
+    var passwdRegex = /^.*(?=.{8,})(?=.*[a-zA-Z])(?=.*\d)(?=.*[^!\$%&/()=?{\[\]}+~#-_.:,;<>|\\]).*$/
+    var usernameRegex = /^[a-zA-Z0-9-_]+$/;
+
+    $('document').ready(function() {
+        $('#username').change(function() {
+            elem = $('#username')
+            username = $(elem).val()
+
+            if(username.length == 0) {
+                $(elem).removeClass('invalid').removeClass('valid');
+            } else if(usernameRegex.test(username)) {
+                $(elem).removeClass('invalid').addClass('valid');
+            } else {
+                $(elem).removeClass('valid').addClass('invalid');
+            }
+        });
+
+        $('#password').change(checkPassword);
+        $('#confirm_password').change(checkPassword);
+
+        $('form').submit(function() {
+            if($('.invalid').size() == 0) {
+                return true;
+            } else {
+                Materialize.toast('Fix the invalid fields before submit!', 10000);
+                return false;
+            }
+        });
+    });
+
+    function checkPassword() {
+        passwd = $('#password')
+        passwdval = $(passwd).val()
+
+        cpasswd = $('#confirm_password')
+        cpasswdval = $(cpasswd).val()
+
+        if(passwdval.length == 0 || cpasswdval.length == 0) {
+            $(passwd).removeClass('invalid').removeClass('valid');
+            $(cpasswd).removeClass('invalid').removeClass('valid');
+        } else if(passwdval == cpasswdval) {
+            $('label[for=confirm_password]').removeAttr('data-error');
+            $(passwd).removeClass('invalid').addClass('valid');
+            $(cpasswd).removeClass('invalid').addClass('valid');
+        } else {
+            $('label[for=confirm_password]').attr('data-error','password and confirmation differs');
+            $(passwd).removeClass('valid').addClass('invalid');
+            $(cpasswd).removeClass('valid').addClass('invalid');
+        }
+
+        if(passwdval.length == 0) {
+            $(passwd).removeClass('invalid').removeClass('valid');
+        } else if(passwdRegex.test(passwdval)) {
+            $('label[for=password]').removeAttr('data-error');
+            $(passwd).removeClass('invalid').addClass('valid');
+        } else {
+            $('label[for=password]').attr('data-error','password must contain alphanumeric characters and symbols');
+            $(passwd).removeClass('valid').addClass('invalid');
+        }
+    }
+
+</script>
+{% endblock %}
+
+{% comment %}
+    vim:set ft=htmldjango:
+{% endcomment %}

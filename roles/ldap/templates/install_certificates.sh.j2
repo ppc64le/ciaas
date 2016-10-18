@@ -1,0 +1,31 @@
+#! /bin/bash
+
+# Copyright IBM Corp, 2016
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+
+mv /var/local/ldap_files/ca-chain.cert.pem /etc/ldap/ca-chain.cert.pem
+mv /var/local/ldap_files/{{ ca_domain }}.cert.pem /etc/ldap/{{ ca_domain }}.cert.pem
+mv /var/local/ldap_files/{{ ca_domain }}.key.pem /etc/ldap/{{ ca_domain }}.key.pem
+
+cp /etc/ldap/ca-chain.cert.pem /usr/share/ca-certificates/ca-chain.crt
+cp /etc/ldap/{{ ca_domain }}.cert.pem /usr/share/ca-certificates/{{ ca_domain }}.crt
+echo "ca-chain.crt" >> /etc/ca-certificates.conf
+echo "{{ ca_domain }}.crt" >> /etc/ca-certificates.conf
+
+chown root:root /etc/ldap/*.pem
+chmod 444 /etc/ldap/*.cert.pem
+chmod 400 /etc/ldap/{{ ca_domain }}.key.pem
+
+update-ca-certificates
+# vi:set ft=sh:

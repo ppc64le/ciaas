@@ -1,0 +1,193 @@
+{% extends 'client/base.html' %}
+
+{% comment %}
+
+    Copyright IBM Corp, 2016
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+    implied. See the License for the specific language governing
+    permissions and limitations under the License.
+
+{% endcomment %}
+
+{% block title %}Partners{% endblock %}
+
+{% block content%}
+
+    <!-- MODALS DESCRIPTION -->
+    {% for partner in partners %}
+    <div id="artifacts-{{ partner.id }}" class="modal">
+        <form action="{% url 'partner:artifacts' partner.id %}" target="_blank" method="POST">
+            <div class="modal-content">
+                <h3>Download {{ partner.shortName }} partner artifacts</h3>
+                <p>Aiming safety the partner artifacts is encrypted and depends
+                   on a password for encryption and posterior use. So keep this
+                   password safe and do not forget it, you will need this later.</p>
+                {% csrf_token %}
+                <div class="input-field">
+                    <input type="password" id="vault_password" name="vault_password" maxlength=16>
+                    <label for="vault_password" class="fill">Vault Password</label>
+                </div>
+                <div class="input-field">
+                    <input type="password" id="confirm_vault_password" name="confirm_vault_password" maxlength=16>
+                    <label for="confirm_vault_password" class="fill">Confirm Password</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <input type="submit" class="btn modal-action modal-close btn-flat green-text" value="Download">
+                <a href="#!" class="btn modal-action modal-close btn-flat red-text">Cancel</a>
+            </div>
+        </form>
+    </div>
+    <div id="block-{{ partner.id }}" class="modal">
+        <div class="modal-content">
+            <h3>Are you sure?</h3>
+            If you {% if not partner.active %}un{% endif %}block <strong>{{ partner.shortName }}</strong>
+            this partner will be {% if partner.active %}removed from{% else %}allowed into{% endif %}
+            <span class="blue-text"><strong>OpenPower CIaaS</strong></span> network.
+        </div>
+        <div class="modal-footer">
+            <a href="#!" class="modal-action modal-close btn-flat waves-effect green-text">NO</a>
+            <a href="{% if partner.active %}{% url 'partner:block' partner.id %}{% else %}{% url 'partner:unblock' partner.id %}{% endif %}"
+                class="modal-action modal-close btn-flat waves-effect red-text">YES</a>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!--PARTNERS LIST-->
+    <div class="container">
+        <div class="row">
+            <div class="col s12 m10">
+                <h2>Partners List</h2>
+            </div>
+            <div class="col s12 m2">
+                <a href="{% url 'partner:new' %}" class="btn fill" style="margin-top: 2em; margin-bottom: 2em;">NEW</a>
+            </div>
+        </div>
+        {% if partners %}
+        <div class="collection">
+            {% for partner in partners %}
+            <div class="collection-item" partner="{{ partner.shortName|lower }}">
+                <div class="row">
+                    <div class="col s12 m2">
+                        <a href="#!"><strong>{{ partner.shortName }}</strong></a>
+                    </div>
+                    <div class="col m8 hide-on-small-only center-align truncate">
+                        <a href="#!"><strong>{{ partner.name }}</strong></a>
+                    </div>
+                    <div class="col s12 m2" style="text-align: right;">
+                        <a href="#!" class="dropdown-button" data-activates="actions-{{ partner.id }}"
+                                                             data-constrainwidth="false"
+                                                             data-alignment="right">
+                            <i class="material-icons blue-text tooltipped"
+                                data-tooltip="Actions"
+                                data-position="left">more_vert</i>
+                        </a>
+                        <ul id="actions-{{ partner.id}}" class="dropdown-content">
+                            <li>
+                                <a href="#artifacts-{{ partner.id }}" class="modal-trigger">
+                                    <i class="material-icons right">insert_drive_file</i>Download artifacts
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#block-{{ partner.id }}" class="modal-trigger">
+                                    {% if partner.active %}
+                                    <i class="material-icons right">block</i>
+                                    Block partner
+                                    {% else %}
+                                    <i class="material-icons right">radio_button_unchecked</i>
+                                    Unblock partner
+                                    {% endif %}
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col s12">
+                        <h6><strong>Nodes</strong></h6>
+                        <ul>
+                            {% for node in partner.node_set.all %}
+                            {% if node.host == '0.0.0.0' or node.port == 0 %}
+                            <li style="border-bottom: solid 1px #e0e0e0;" class="row">
+                                <span class="col s12 center-align">--- not initialized node ---</span>
+                            </li>
+                            {% else %}
+                            <li style="border-bottom: solid 1px #e0e0e0;" class="row">
+                                <span class="col s8">{{ node.host }}:{{ node.port }}</span>
+                                <span class="col s4 right-align {% if node.status == 'online' %}green-text{% else %}red-text{% endif %}">
+                                    <strong>{{ node.status|upper }}</strong>
+                                </span>
+                            </li>
+                            {% endif %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p>No partners available</p>
+        {% endif %}
+    </div>
+
+{% endblock %}
+
+{% block footer_scripts %}
+
+<script type="text/javascript">
+    var passwdRegex = /^.*(?=.{8,})(?=.*[a-zA-Z])(?=.*\d).*$/
+
+    $(document).ready(function() {
+        $('.modal-trigger').leanModal();
+        $('input[type="password"]').change(checkPassword);
+    });
+
+    function checkPassword(e) {
+        form = $(e.currentTarget).closest('form');
+
+        passwd = $(form).find('#vault_password');
+        passwdval = $(passwd).val();
+
+        cpasswd = $(form).find('#confirm_vault_password');
+        cpasswdval = $(cpasswd).val();
+
+        if(passwdval.length == 0 || cpasswdval.length == 0) {
+            $(passwd).removeClass('invalid').removeClass('valid');
+            $(cpasswd).removeClass('invalid').removeClass('valid');
+        } else if(passwdval == cpasswdval) {
+            $('label[for=confirm_vault_password]').removeAttr('data-error');
+            $(passwd).removeClass('invalid').addClass('valid');
+            $(cpasswd).removeClass('invalid').addClass('valid');
+        } else {
+            $('label[for=confirm_vault_password]').attr('data-error','password and confirmation differs');
+            $(passwd).removeClass('valid').addClass('invalid');
+            $(cpasswd).removeClass('valid').addClass('invalid');
+        }
+
+        if(passwdval.length == 0) {
+            $(passwd).removeClass('invalid').removeClass('valid');
+        } else if(passwdRegex.test(passwdval)) {
+            $('label[for=vault_password]').removeAttr('data-error');
+            $(passwd).removeClass('invalid').addClass('valid');
+        } else {
+            $('label[for=vault_password]').attr('data-error','password must contain at least 8 alphanumeric characters');
+            $(passwd).removeClass('valid').addClass('invalid');
+        }
+    }
+</script>
+
+{% endblock %}
+
+{% comment %}
+    vim:set ft=htmldjango:
+{% endcomment %}

@@ -1,0 +1,47 @@
+# Ignore log files
+*.log
+
+# Home persistence directories
+*home*
+
+# Python virtual environments
+*venv*
+
+# Python compiled files
+*.pyc
+
+# Ignore sqlite3 databases
+*.sqlite3
+
+# Ignore bash history from docker containers
+.bash_history
+
+# Yaml design test file
+test.yml
+
+# Jenkins jobs cache files
+cache-host-jobs*.yml
+
+# Vagrant context
+.vagrant/
+
+# Ansible retry files
+*.retry
+
+# Artifacts files
+partner_artifacts.yml
+
+# Secret files and secret role
+*secret*
+roles/secret/
+
+# Private, public rsa keys and certificate artifacts
+id_rsa*
+authorized_keys
+*.pem
+
+# Some auxiliar jenkins files
+roles/jenkins/ignore
+
+# hpi jenkins plugins
+*.hpi

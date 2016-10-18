@@ -1,0 +1,73 @@
+# Copyright IBM Corp, 2016
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+
+---
+- name: Create gearmand directory
+  file: >
+    path=/var/powerci/gearmand
+    state=directory
+    owner=1000
+    group=1000
+
+- name: Copy entrypoint.sh
+  copy: >
+    src=entrypoint.sh
+    dest=/var/powerci/gearmand/entrypoint.sh
+    owner=1000
+    group=1000
+    mode=775
+
+- name: Copy authorized_keys file
+  copy: >
+    src=./roles/gearmand/files/authorized_keys
+    dest=/var/powerci/gearmand/authorized_keys
+    owner=1000
+    mode=0644
+
+- name: Render iptables_setup template
+  template: >
+    src=./roles/gearmand/templates/iptables_setup.sh.j2
+    dest=/var/powerci/gearmand/iptables_setup.sh
+
+- name: Render Dockerfile
+  template: >
+    src=./roles/gearmand/templates/Dockerfile.j2
+    dest=/var/powerci/gearmand/Dockerfile
+
+- name: Render docker-compose template
+  template: >
+    src=./roles/gearmand/templates/docker-compose.yml.j2
+    dest=/var/powerci/gearmand/docker-compose.yml
+
+- name: Build gearmand image
+  docker_service:
+    project_src: "{{ image.path }}"
+    project_name: gearmand
+    build: yes
+    recreate: never
+
+- name: Run gearmand container
+  docker_service:
+    project_src: "{{ image.path }}"
+    project_name: gearmand
+    state: present
+    recreate: smart
+
+- name: Remove stopped containers
+  shell: docker rm `docker ps -q -f status=exited`
+  failed_when: False
+
+- name: Remove dangling images
+  shell: docker rmi `docker images -q -f dangling=true`
+  failed_when: False

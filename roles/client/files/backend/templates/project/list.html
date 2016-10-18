@@ -1,0 +1,274 @@
+{% extends "client/base.html" %}
+
+{% comment %}
+
+    Copyright IBM Corp, 2016
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+    implied. See the License for the specific language governing
+    permissions and limitations under the License.
+
+{% endcomment %}
+
+{% load project_filters %}
+
+{% block title %}Projects{% endblock %}
+
+{% block content %}
+    {% for p in projects %}
+    <div id="delete_{{ p.name|lower }}" class="modal">
+        <div class="modal-content">
+            <h4>Are you sure?</h4>
+            If you delete the project {{ p.name }} you will lose all its
+            associated information. This action cannot be undone.
+        </div>
+        <div class="modal-footer">
+            <a href="#!" class="modal-action modal-close btn green">No</a>
+            <a href="{% url 'project:delete' p.name %}" class="modal-action modal-close btn red">Yes</a>
+        </div>
+    </div>
+    {% endfor %}
+
+    <div class="container">
+        <div class="row">
+            <div class="col s12 m9 l10">
+                <h2>Projects</h2>
+            </div>
+            <div class="col s12 m3 l2">
+                <a href="{% url 'project:select_project_type' %}" class="btn fill" style="margin-top: 2em; margin-bottom: 2em;">NEW</a>
+            </div>
+        </div>
+    </div>
+    {% if projects %}
+        <div class="container">
+            <ul class="tabs">
+                <li class="tab col s12 m4"><a class="blue-text" href="#all">All</a></li>
+                {% for tabname in tabs %}
+                <li class="tab col s12 m4"><a class="blue-text{% if tabname == active %} active{% endif %}" href="#tab_{{ tabname|lower }}">{{ tabname }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div id="tab_content" style="margin-top: 2em;">
+            <div id="all" class="collection container">
+                {% for p in projects %}
+                <div class="row collection-item">
+                    <div class="col s12 m6">
+                        {% if p.name in tabs %}
+                        <a href="#!" target="tab">
+                        {% elif tabs|length > 0 %}
+                        <a href="{% url 'project:list' %}?tabs={{ tabs|join:'!' }}!{{ p.name|lower }}&active={{ p.name|lower }}">
+                        {% else %}
+                        <a href="{% url 'project:list' %}?tabs={{ p.name|lower }}&active={{ p.name|lower }}">
+                        {% endif %}
+                            {{ p.name }}
+                        </a>
+                    </div>
+                    <div class="col s12 m6" style="text-align: right">
+                        <a href="#!" build="{{ p.name }}">
+                            <i class="material-icons blue-text tooltipped"
+                                data-tooltip="Schedule a build"
+                                data-position="left">av_timer</i>
+                        </a>
+                        <a href="#delete_{{ p.name|lower }}" class="modal-trigger">
+                            <i class="material-icons grey-text text-darken-4 tooltipped"
+                                data-tooltip="Delete project"
+                                data-position="left">delete</i>
+                        </a>
+                        <a href="#!">
+                            {% with builds=p.builds %}
+                            {% if builds|length == 0 %}
+                            <i class="material-icons grey-text text-darken-1 tooltipped"
+                                data-tooltip="Last build: Not built"
+                                data-position="left">remove_circle</i>
+                            {% else %}
+                            {% with lastResult=builds.0.result %}
+                            {% if lastResult == 'SUCCESS' %}
+                            <i class="material-icons green-text tooltipped"
+                                data-tooltip="Last build: Success"
+                                data-position="left">check_circle</i>
+                            {% elif lastResult == 'ABORTED' %}
+                            <i class="material-icons black-text tooltipped"
+                                data-tooltip="Last build: Aborted"
+                                data-position="left">remove_circle</i>
+                            {% elif lastResult == None %}
+                            <i class="material-icons grey-text tooltipped"
+                                data-tooltip="Last build: Building"
+                                data-position="left">timelapse</i>
+                            {% elif lastResult == 'FAILURE' %}
+                            <i class="material-icons red-text tooltipped"
+                                data-tooltip="Last build: Failed"
+                                data-position="left">error</i>
+                            {% endif %}
+                            {% endwith %}
+                            {% endif %}
+                            {% endwith %}
+                        </a>
+
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% for project in projects %}
+            {% if project.name|lower in tabs %}
+            <div id="tab_{{ project.name|lower }}">
+                <div class="container">
+                    <h3>{{ project.name }}</h3>
+                </div>
+                <div class="row container" style="padding: 0.2em 0em 1em 0em;">
+                    <ul>
+                        <li class="col s12 m6 l3">
+                            <a href="#!" class="blue-text" build="{{ project.name }}">
+                                <i class="material-icons left">av_timer</i>Schedule a build
+                            </a>
+                        </li>
+                        <li class="col s12 m6 l3">
+                            <a href="#delete_{{ project.name|lower }}" class="modal-trigger grey-text text-darken-4">
+                                <i class="material-icons left">delete</i>Delete
+                            </a>
+                        </li>
+                        <li class="col s12 m6 l3">
+                            {% with builds=project.builds %}
+                            {% if builds|length == 0%}
+                            <i class="material-icons grey-text text-darken-1 left">remove_circle</i>Last build: Not built
+                            {% else %}
+                            {% with lastResult=builds.0.result %}
+                            {% if lastResult == 'SUCCESS' %}
+                            <i class="material-icons green-text left">check_circle</i>Last build: Success
+                            {% elif lastResult == 'ABORTED' %}
+                            <i class="material-icons black-text left">remove_circle</i>Last build: Aborted
+                            {% elif lastResult == None %}
+                            <i class="material-icons blue-text left">timelapse</i>Last build: Building
+                            {% elif lastResult == 'FAILURE' %}
+                            <i class="material-icons red-text left">error</i>Last build: Failed
+                            {% endif %}
+                            {% endwith %}
+                            {% endif %}
+                            {% endwith %}
+                        </li>
+                        <li class="col s12 m6 l3">
+                            {% with tabname=project.name|lower %}
+                            {% with remaining_tabs=tabs|reject:tabname %}
+                            <a href="{% url 'project:list' %}{% if remaining_tabs|length > 0 %}?tabs={{ remaining_tabs|join:'!' }}{% endif %}" class="grey-text text-darken-4">
+                                <i class="material-icons left">close</i>Close tab
+                            </a>
+                            {% endwith %}
+                            {% endwith %}
+                        </li>
+                    </ul>
+                </div>
+                <div class="container">
+                    <div class="row valign-wrapper">
+                        <div class="col s6">
+                            <h4>Builds</h4>
+                        </div>
+                        <div class="col s6 right-align valign">
+                            <a href="#!"
+                                class="btn-flat waves-effect waves-dark close-all"
+                                data-projtab="{{ project.id }}">
+                                <i class="material-icons left">view_headline</i>
+                                Close All
+                            </a>
+                        </div>
+                    </div>
+                    <ul class="collapsible" data-collapsible="expandable" data-projtab="{{ project.id }}">
+                    {% for build in project.builds %}
+                        <li>
+                            <div class="collapsible-header">
+                                <div class="row">
+                                    <span class="col s12 m3">{{ build.name }}</span>
+                                    <span class="col s12 m6 center-align">{{ build.timestamp }}</span>
+                                    <span class="col s12 m3 right-align">{{ build.result }}</span>
+                                </div>
+                            </div>
+                            <div class="collapsible-body">
+                                <h5>Console Output:</h5>
+                                <pre>
+                                {% autoescape off %}
+                                {{ build.consoleOutput }}
+                                {% endautoescape %}
+                                </pre>
+                            </div>
+                        </li>
+                    {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="container">No projects available</p>
+        {% endif %}
+
+        <a href="#!" id="btn-bck2top" class="btn-floating bck2top">
+            <i class="material-icons">arrow_upward</i>
+        </a>
+
+{% endblock %}
+
+{% block footer_scripts %}
+
+<script type="text/javascript" src="/static/js/scrolltop.js"></script>
+<script type="text/javascript">
+    $('document').ready(function() {
+        // Set modal-triggers
+        $('.modal-trigger').leanModal();
+
+        // Set schedule build buttons.
+        $('a[build]').each(function(i, elem) {
+            $(elem).click(function() {
+                projName = $(elem).attr('build');
+                url = "{% url 'project:build' '$projName$' %}";
+                url = url.replace('$projName$',projName);
+                $.get(url, function(response) {
+                    Materialize.toast('Build scheduled: ' + projName, 3000);
+                });
+            });
+        });
+
+        // Set abort build buttons.
+        $('a[abort]').each(function(i, elem) {
+            $(elem).click(function() {
+                projName = $(elem).attr('abort');
+                url = "{% url 'project:abort' '$projName$' %}";
+                url = url.replace('$projName$', projName);
+                $.get(url, function(response) {
+                    Materialize.toast('Build aborted: ' + projName, 3000);
+                });
+            });
+        });
+
+        // Open projects into tabs.
+        $('a[target="tab"]').each(function(i, elem) {
+            $(elem).click(function() {
+                projName = $(elem).text().toLowerCase();
+                alert($('a[href="#tab_' + projName + '"]').text())
+                $('a[href="#tab_' + projName + '"]').click();
+                return false;
+             });
+        });
+
+        // Close all build info collapsibles
+        $('a.close-all').click(function() {
+            projtab = $(this).data('projtab');
+            collapsible_selector = 'ul[data-projtab="$projtab$"]';
+            collapsible_selector = collapsible_selector.replace('$projtab$', projtab);
+            $(collapsible_selector + ' li div.collapsible-body').slideUp();
+            $(collapsible_selector + ' *').removeClass('active');
+        });
+    });
+</script>
+
+{% endblock %}
+
+{% comment %}
+    vim:set ft=htmldjango:
+{% endcomment %}

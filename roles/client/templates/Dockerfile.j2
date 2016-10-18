@@ -1,0 +1,84 @@
+# Copyright IBM Corp, 2016
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+
+FROM ppc64le/debian:jessie
+MAINTAINER Davi Diorio Mendes <ddiorio@br.ibm.com>
+
+RUN useradd -m -s /bin/bash client \
+    && echo "client:client" | chpasswd; \
+    apt-get -q update; \
+    DEBIAN_FRONTEND="noninteractive" apt-get -q upgrade -y -o Dpkg::Options::="--force-confnew" --no-install-recommends &&\
+    DEBIAN_FRONTEND="noninteractive" apt-get -q install -y -o Dpkg::Options::="--force-confnew"  --no-install-recommends \
+    gcc \
+    zlib1g-dev\
+    python \
+    python-dev \
+    libldap2-dev \
+    libsasl2-dev \
+    libssl-dev \
+    libxml2-dev \
+    libxslt-dev \
+    libffi-dev \
+    vim \
+    openssh-client \
+    openssl \
+    ldap-utils \
+    ca-certificates \
+    sudo \
+    nginx; \
+    rm /bin/sh && ln -s /bin/bash /bin/sh
+
+
+RUN echo "client ALL=(root) NOPASSWD: /usr/sbin/nginx" > /etc/sudoers
+
+COPY ca-chain.cert.pem /usr/share/ca-certificates/ca-chain.crt
+COPY {{ client_private_cert_key }} /etc/ssl/{{ client_private_cert_key }}
+COPY {{ client_certificate }} /etc/ssl/{{ client_certificate }}
+RUN echo "ca-chain.crt" >> /etc/ca-certificates.conf \
+    && update-ca-certificates
+
+COPY ldap.conf /etc/ldap/ldap.conf
+COPY requirements.txt /home/client/requirements.txt
+ADD https://bootstrap.pypa.io/get-pip.py /home/client/get-pip.py
+RUN python /home/client/get-pip.py \
+    && pip install --upgrade pip \
+    && pip install -r /home/client/requirements.txt; \
+    pip install uwsgi
+
+RUN mkdir -p /var/log/client \
+    && touch /var/log/client/client.log \
+    && chown -R client:client /var/log/client; \
+    mkdir -p /var/log/uwsgi \
+    && touch /var/log/uwsgi/powerci_client.log \
+    && chown -R client:client /var/log/uwsgi
+
+RUN mkdir -p /home/client/backend/clientdb /home/client/.ssh
+COPY id_rsa* /home/client/.ssh/
+
+RUN mkdir -p /var/powerci/clientdb \
+    && chown -R client:client /var/powerci
+
+COPY bootstrap.sh /home/client/bootstrap.sh
+RUN chown client:client /home/client/bootstrap.sh; \
+    chmod 0544 /home/client/bootstrap.sh
+
+COPY ./backend /home/client/backend
+RUN chown -R client:client /home/client; \
+    ln -s /home/client/backend/client_nginx.conf /etc/nginx/sites-enabled/
+
+USER client
+EXPOSE 8080
+CMD ["/home/client/bootstrap.sh"]
+
+# vim:set ft=dockerfile:

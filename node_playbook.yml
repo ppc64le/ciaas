@@ -1,0 +1,55 @@
+# Copyright IBM Corp, 2016
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+
+---
+- name: Node pre setup
+  gather_facts: yes
+  become: no
+  hosts: localhost
+  vars:
+    project_path: "{{ playbook_dir }}"
+  roles:
+    - node_pre_setup
+
+- name: Slave playbook
+  gather_facts: yes
+  become: yes
+  become_method: sudo
+  hosts: slave
+  vars:
+    project_path: "{{ playbook_dir }}"
+  roles:
+    - slave
+
+- name: Jenkins playbook
+  gather_facts: yes
+  become: yes
+  become_method: sudo
+  hosts: jenkins
+  vars:
+    project_path: "{{ playbook_dir }}"
+  vars_files:
+    - partner_artifacts.yml
+  roles:
+    - {role: jenkins,
+        using_gearman_host: "{{ groups.gearmand[0] }}",
+        using_gearman_port: "{{ hostvars[groups['gearmand'][0]].gearmand_port }}",
+        using_ldap_protocol: "ldaps",
+        using_ldap_host: "{{ groups.ldap[0] }}",
+        using_ldap_port: "{{ hostvars[groups['ldap'][0]].ldaps_port }}",
+        ldap_ca_domain: "{{ hostvars[groups.ldap[0]].ca_domain }}",
+        using_client_host: "{{ groups.client[0] }}",
+        using_client_port: "{{ hostvars[groups['client'][0]].client_port }}",
+        using_docker_host: "172.17.0.1",
+        using_docker_port: "2375"}

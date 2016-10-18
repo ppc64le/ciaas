@@ -1,0 +1,84 @@
+{% comment %}
+
+    Copyright IBM Corp, 2016
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+    implied. See the License for the specific language governing
+    permissions and limitations under the License.
+
+{% endcomment %}
+
+<!DOCTYPE html>
+<html>
+    <head>
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+        <link type="text/css" href="/static/css/materialize.min.css" rel="stylesheet" media="screen,projection" />
+        <link type="text/css" href="/static/css/main.css" rel="stylesheet" media="screen,projection" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        {% block head %}{% endblock %}
+        <title>{% block title %}{% endblock %} - CIaaS</title>
+    </head>
+    <body>
+        <nav class="blue accent-4">
+            <div class="nav-wrapper container">
+                <a href="{% url 'home' %}" class="brand-logo">CIaaS</a>
+                <ul id="nav-mobile" class="right hide-on-med-and-down">
+                    {% if user and user.is_active %}
+                    <li><a class="dropdown-button" data-activates="user_dropdown" data-beloworigin="true" href="#!"><i class="material-icons left">arrow_drop_down</i>{{ user.username }}</a></li>
+                    {% else %}
+                    <li><a href="{% url 'account:signin' %}">Sign In</a></li>
+                    {% endif %}
+                </ul>
+                {% if user and user.is_active %}
+                <ul id="user_dropdown" class="dropdown-content">
+                    <li><a href="{% url 'account:profile' %}">Profile</a></li>
+                    <li><a href="{% url 'project:list' %}">Projects</a></li>
+                    {% if user.is_staff %}<li><a href="{% url 'partner:list' %}">Partners</a></li>{% endif %}
+                    <li><a href="{% url 'account:signout' %}">Sign Out</a></li>
+                </ul>
+                {% endif %}
+            </div>
+        </nav>
+
+        <main>
+        {% block content %}
+        {% endblock %}
+        </main>
+
+        <footer class="page-footer blue accent-4">
+            <div class="container white-text">
+                <div class="row">
+                    <div class="col m12 l6">
+                        <h5>Continuous Integration as a Service</h5>
+                    </div>
+                    <div class="col m12 l6" style="border-left: 1px solid white;">
+                        <ul>
+                            <li><a class="white-text" href="https://github.com" target="_blank">CIaaS on Github</a></li>
+                            <li><a class="white-text" href="http://openpowerfoundation.org/" target="_blank">OpenPower Foundation</a></li>
+                            <li><a class="white-text" href="http://openpowerfoundation.org/about-us/" target="_blank">What is OpenPower?</a></li>
+                            <li><a class="white-text" href="https://en.wikipedia.org/wiki/Continuous_integration" target="_blank">What is CI?</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+        <script type="text/javascript" src="/static/js/jquery-2.1.1.min.js"></script>
+        <script type="text/javascript" src="/static/js/materialize.min.js"></script>
+
+        {% block footer_scripts %}
+        {% endblock %}
+    </body>
+</html>
+
+{% comment %}
+    vim:set ft=htmldjango:
+{% endcomment %}

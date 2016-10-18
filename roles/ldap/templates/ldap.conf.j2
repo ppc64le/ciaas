@@ -1,0 +1,18 @@
+#
+# LDAP Defaults
+#
+
+# See ldap.conf(5) for details
+# This file should be world readable but not world writable.
+
+BASE	{{ ldap_root_dn }}
+URI	ldap://localhost
+BINDDN {{ ldap_manager_cn }},{{ ldap_root_dn }}
+
+SIZELIMIT 0
+TIMELIMIT 0
+#DEREF		never
+
+# TLS certificates (needed for GnuTLS)
+TLS_CACERT	/etc/ldap/ca-chain.cert.pem
+TLS_REQCERT allow

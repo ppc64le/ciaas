@@ -1,0 +1,64 @@
+# Copyright IBM Corp, 2016
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+
+---
+- name: Master pre setup
+  gather_facts: yes
+  hosts: localhost
+  connection: local
+  vars:
+    - project_path: "{{ playbook_dir }}"
+  roles:
+    - master_pre_setup
+
+- name: LDAP playbook
+  gather_facts: yes
+  hosts: ldap
+  # hosts: none
+  vars:
+    project_path: "{{ playbook_dir }}"
+  vars_files:
+    - secret.yml
+  roles:
+    - ldap
+
+- name: Client playbook
+  gather_facts: yes
+  hosts: client
+  vars:
+    project_path: "{{ playbook_dir }}"
+  vars_files:
+    - secret.yml
+  roles:
+    - {role: client,
+       using_ldap_host: "{{ groups.ldap[0] }}",
+       using_ldap_port: "{{ hostvars[groups.ldap[0]].ldap_port }}",
+       ldap_ca_domain: "{{ hostvars[groups.ldap[0]].ca_domain }}",
+       ldap_root_dn: "{{ hostvars[groups.ldap[0]].ldap_root_dn }}",
+       using_gearmand_host: "{{ groups.gearmand[0] }}",
+       using_gearmand_port: "{{ hostvars[groups.gearmand[0]].gearmand_port }}",
+       using_gearmand_ssh_port: "{{ hostvars[groups.gearmand[0]].ssh_port }}",
+       using_gearmand_ssh_user: "{{ hostvars[groups.gearmand[0]].ssh_user }}",
+       remove_dangling_projects: "False"}
+
+- name: Gearman playbook
+  gather_facts: yes
+  # hosts: none
+  hosts: gearmand
+  vars:
+    project_path: "{{ playbook_dir }}"
+  roles:
+    - {role: gearmand,
+       using_client_host: "{{ groups.client[0] }}",
+       using_client_port: "{{ hostvars[groups.client[0]].client_port }}"}

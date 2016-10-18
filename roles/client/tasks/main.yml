@@ -1,0 +1,215 @@
+# Copyright IBM Corp, 2016
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+
+---
+- name: Create client directory
+  file: >
+    path=/var/powerci/client/
+    state=directory
+
+- name: Copy backend files
+  copy: >
+    src=backend
+    dest=/var/powerci/client/
+
+- name: Download materialize-css
+  get_url: >
+    url=http://materializecss.com/bin/materialize-v{{ materialize_version }}.zip
+    dest=/var/powerci/client/materialize-v{{ materialize_version }}.zip
+    owner=1000
+    group=1000
+
+- name: Unzip materialize-css
+  shell: "unzip -o /var/powerci/client/materialize-v{{ materialize_version }}.zip"
+  args:
+    chdir: /var/powerci/client
+
+- name: Create materialize-css static directories
+  file: >
+    path=/var/powerci/client/backend/static/{{ item }}
+    state=directory
+  with_items:
+    - js
+    - css
+    - font
+    - fonts
+
+- name: Copy materialize.min.css
+  copy: >
+    src=/var/powerci/client/materialize/css/materialize.min.css
+    dest=/var/powerci/client/backend/static/css/materialize.min.css
+    remote_src=True
+    owner=1000
+    group=1000
+
+- name: Create roboto fonts directory
+  file: >
+    path=/var/powerci/client/backend/static/fonts/roboto
+    state=directory
+
+- name: Copy roboto fonts
+  copy: >
+    src=/var/powerci/client/materialize/fonts/roboto/{{ item }}
+    dest=/var/powerci/client/backend/static/fonts/roboto/{{ item }}
+    remote_src=True
+    owner=1000
+    group=1000
+  with_items:
+    - Roboto-Bold.eot
+    - Roboto-Bold.ttf
+    - Roboto-Bold.woff
+    - Roboto-Bold.woff2
+    - Roboto-Light.eot
+    - Roboto-Light.ttf
+    - Roboto-Light.woff
+    - Roboto-Light.woff2
+    - Roboto-Medium.eot
+    - Roboto-Medium.ttf
+    - Roboto-Medium.woff
+    - Roboto-Medium.woff2
+    - Roboto-Regular.eot
+    - Roboto-Regular.ttf
+    - Roboto-Regular.woff
+    - Roboto-Regular.woff2
+    - Roboto-Thin.eot
+    - Roboto-Thin.ttf
+    - Roboto-Thin.woff
+    - Roboto-Thin.woff2
+
+
+- name: Copy materialize.min.js
+  copy: >
+    src=/var/powerci/client/materialize/js/materialize.min.js
+    dest=/var/powerci/client/backend/static/js/materialize.min.js
+    remote_src=True
+    owner=1000
+    group=1000
+
+- name: Download jquery
+  get_url: >
+    url=https://code.jquery.com/jquery-{{ jquery_version }}.min.js
+    dest=/var/powerci/client/backend/static/js/jquery-{{ jquery_version }}.min.js
+    owner=1000
+    group=1000
+
+- name: Render Dockerfile
+  template: >
+    src=Dockerfile.j2
+    dest=/var/powerci/client/Dockerfile
+
+- name: Copy requirements file
+  copy: >
+    src=requirements.txt
+    dest=/var/powerci/client/requirements.txt
+
+- name: Copy ldap.conf
+  copy: >
+    src=ldap.conf
+    dest=/var/powerci/client/ldap.conf
+
+- name: Copy private ssh key
+  copy: >
+    src=id_rsa
+    dest=/var/powerci/client/id_rsa
+    owner=1000
+    mode=0600
+
+- name: Copy public ssh key
+  copy: >
+    src=id_rsa.pub
+    dest=/var/powerci/client/id_rsa.pub
+    owner=1000
+    mode=0644
+
+- name: Copy private certificate key
+  copy: >
+    src=./roles/secret/files/{{ client_private_cert_key }}
+    dest=/var/powerci/client/{{ client_private_cert_key }}
+    owner=1000
+    mode=0400
+
+- name: Copy OpenPower CIaaS Client certificate
+  copy: >
+    src={{ client_certificate }}
+    dest=/var/powerci/client/{{ client_certificate }}
+    owner=1000
+    group=1000
+    mode=0444
+
+- name: Copy ca-chain certificate
+  copy: >
+    src=./roles/ldap/files/ca-chain.cert.pem
+    dest=/var/powerci/client/ca-chain.cert.pem
+    owner=1000
+    mode=0444
+
+- name: Copy bootstrap.sh
+  copy: >
+    src=bootstrap.sh
+    dest=/var/powerci/client/bootstrap.sh
+    owner=1000
+    group=1000
+
+- name: Render settings template
+  template: >
+    src=./roles/client/templates/settings.py.j2
+    dest=/var/powerci/client/backend/client/settings.py
+
+- name: Fetch rendered settings
+  fetch: >
+    src=/var/powerci/client/backend/client/settings.py
+    dest=./roles/client/files/backend/client/settings.py
+    flat=yes
+    owner=1000
+    group=1000
+
+- name: Render secret template
+  template: >
+    src=./roles/client/templates/secret.py.j2
+    dest=/var/powerci/client/backend/client/secret.py
+
+- name: Fetch rendered secret
+  fetch: >
+    src=/var/powerci/client/backend/client/secret.py
+    dest=./roles/client/files/backend/client/secret.py
+    flat=yes
+    owner=1000
+    group=1000
+
+- name: Render docker-compose template
+  template: >
+    src=./roles/client/templates/docker-compose.yml.j2
+    dest=/var/powerci/client/docker-compose.yml
+
+- name: Build client image
+  docker_service:
+    project_src: "{{ image.path }}"
+    project_name: client
+    build: yes
+    recreate: never
+
+- name: Run client container
+  docker_service:
+    project_src: "{{ image.path }}"
+    project_name: client
+    state: present
+    recreate: smart
+
+- name: Remove stopped containers
+  shell: docker rm `docker ps -q -f status=exited`
+  failed_when: False
+
+- name: Remove dangling images
+  shell: docker rmi `docker images -q -f dangling=true`
+  failed_when: False

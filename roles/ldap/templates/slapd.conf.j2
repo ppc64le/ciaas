@@ -1,0 +1,57 @@
+# Copyright IBM Corp, 2016
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+
+# slapd.conf - Configuration file for LDAP SLAPD
+##########
+# Basics #
+##########
+include /etc/ldap/schema/core.schema
+include /etc/ldap/schema/cosine.schema
+include /etc/ldap/schema/inetorgperson.schema
+
+pidfile /var/run/slapd/slapd.pid
+argsfile /var/run/slapd/slapd.args
+loglevel none
+
+modulepath /usr/lib/ldap
+moduleload back_hdb
+
+###########
+# SSL/TLS #
+###########
+TLSCACertificateFile  /etc/ldap/ca-chain.cert.pem
+TLSCertificateFile    /etc/ldap/{{ ca_domain }}.cert.pem
+TLSCertificateKeyFile /etc/ldap/{{ ca_domain }}.key.pem
+
+##########################
+# Database Configuration #
+##########################
+database hdb
+suffix "{{ ldap_root_dn }}"
+rootdn "{{ ldap_manager_cn }},{{ ldap_root_dn }}"
+rootpw {{ ldap_manager_password }}
+directory /var/local/ldap/database
+index objectClass,cn,uid,mail eq
+
+########
+# ACLs #
+########
+access to attrs=userPassword
+       by anonymous auth
+       by self write
+       by * none
+
+access to *
+       by self write
+       by * none

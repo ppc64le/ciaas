@@ -1,0 +1,59 @@
+/*
+ * Copyright IBM Corp, 2016
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * permissions and limitations under the License.
+ */
+
+import jenkins.model.Jenkins
+import jenkins.model.IdStrategy
+import hudson.security.AuthorizationStrategy
+import hudson.security.GlobalMatrixAuthorizationStrategy
+import hudson.security.LDAPSecurityRealm
+import hudson.security.csrf.DefaultCrumbIssuer
+
+
+jInstance = Jenkins.instance
+
+jInstance.crumbIssuer = new DefaultCrumbIssuer(true)
+
+// https://github.com/jenkinsci/ldap-plugin/blob/master/src/main/java/hudson/security/LDAPSecurityRealm.java
+jInstance.securityRealm = new LDAPSecurityRealm(
+    "{{ using_ldap_protocol }}://{{ using_ldap_host }}:{{ using_ldap_port }}",        // String server
+    "dc=example,dc=com",             // String rootDN
+    "ou=Users",                      // String userSearchBase
+    "uid={0}",                       // String userSearch
+    "",                              // String groupSearchBase
+    "",                              // String groupSearchFilter
+    null,                            // LDAPGroupMembershipStrategy groupMembershipStrategy
+    "cn=Manager,dc=example,dc=com",  // String managerDN
+    new hudson.util.Secret("admin"), // Secret managerPasswordSecret
+    false,                           // boolean inhibitInferRootDN
+    false,                           // boolean disableMailAddressResolver
+    null,                            // CacheConfiguration cache
+    null,                            // EnvironmentProperty[] environmentProperties
+    "cn",                            // String displayNameAttributeName
+    "mail",                          // String mailAddressAttributeName
+    IdStrategy.CASE_INSENSITIVE,     // IdStrategy userIdStrategy
+    IdStrategy.CASE_INSENSITIVE,     // IdStrategy groupIdStrategy
+)
+
+AuthorizationStrategy auth = new GlobalMatrixAuthorizationStrategy()
+auth.add(Jenkins.READ, 'anonymous')
+auth.add(Jenkins.ADMINISTER, 'admin')
+auth.add(Jenkins.ADMINISTER, '{{ partner_user }}')
+auth.add(Jenkins.ADMINISTER, '{{ admin_user }}')
+jInstance.authorizationStrategy = auth
+
+jInstance.save()
+
+// vi:set ft=groovy:

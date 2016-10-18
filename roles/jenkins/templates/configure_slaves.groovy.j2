@@ -1,0 +1,74 @@
+/*
+ * Copyright IBM Corp, 2016
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * permissions and limitations under the License.
+ */
+
+import jenkins.model.Jenkins
+import hudson.model.Node
+import hudson.slaves.DumbSlave
+import hudson.plugins.sshslaves.SSHLauncher
+import hudson.slaves.ComputerLauncher
+import hudson.slaves.RetentionStrategy
+import java.util.ArrayList
+
+def seqid = 0
+
+ComputerLauncher launcher = null
+Node slave = null
+
+{% for slave in groups.slave %}
+{% if hostvars[slave].debian_ports is defined %}
+{% for debian_port in hostvars[slave].debian_ports %}
+launcher = (ComputerLauncher) new SSHLauncher("{{ slave }}",
+                                              {{ debian_port }},
+                                              "jenkins",
+                                              "", "", "", "",
+                                              -1, -1, -1)
+slave = (Node) new DumbSlave("ppc64le_debian_jessie_" + seqid++,
+                             "Just a test dumb slave",
+                             "/home/jenkins",
+                             "2",
+                             Node.Mode.NORMAL,
+                             "ppc64le_debian_jessie any",
+                             launcher,
+                             new RetentionStrategy.Always(),
+                             new ArrayList())
+Jenkins.instance.addNode(slave)
+{% endfor %}
+{% endif %}
+{% if hostvars[slave].ubuntu_ports is defined %}
+{% for ubuntu_port in hostvars[slave].ubuntu_ports %}
+launcher = (ComputerLauncher) new SSHLauncher("{{ slave }}",
+                                              {{ ubuntu_port }},
+                                              "jenkins",
+                                              "", "", "", "",
+                                              -1, -1, -1)
+slave = (Node) new DumbSlave("ppc64le_ubuntu_16_04_" + seqid++,
+                             "Just a test dumb slave",
+                             "/home/jenkins",
+                             "2",
+                             Node.Mode.NORMAL,
+                             "ppc64le_ubuntu_16_04 any",
+                             launcher,
+                             new RetentionStrategy.Always(),
+                             new ArrayList())
+Jenkins.instance.addNode(slave)
+{% endfor %}
+{% endif %}
+{% endfor %}
+// Jenkins.instance.injector.getInstance(hudson.slaves.ChannelPinger.class).@pingInterval = -1
+Jenkins.instance.setNumExecutors(0)
+Jenkins.instance.save()
+
+// vim:set ft=groovy:

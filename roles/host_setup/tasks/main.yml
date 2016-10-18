@@ -1,0 +1,116 @@
+# Copyright IBM Corp, 2016
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+
+---
+- name: Fix Fedora Ansible
+  sudo: yes
+  raw: dnf install -y libselinux-python python2
+  when: (ansible_os_family == "RedHat" and ansible_distribution == "Fedora")
+
+- name: Docker for Debian family
+  set_fact:
+    docker_pkg: docker.io
+  when: ansible_os_family == "Debian"
+
+- name: Docker for RedHat family
+  set_fact:
+    docker_pkg: docker
+  when: ansible_os_family == "RedHat"
+
+- name: Docker for Fedora
+  set_fact:
+    docker_pkg: docker-engine
+  when: ansible_distribution == "Fedora"
+
+- name: python-dev for Debian family
+  set_fact:
+    pydev_pkg: python-dev
+  when: ansible_os_family == "Debian"
+
+- name: python-devel for RedHat family
+  set_fact:
+    pydev_pkg: python-devel
+  when: ansible_os_family == "RedHat"
+
+- name: Install EPEL Repository
+  sudo: yes
+  package: name=epel-release state=present
+  when: ansible_distribution == "CentOS"
+
+- name: Install Docker
+  sudo: yes
+  package: name={{docker_pkg}} state=present
+
+- name: Start Docker service
+  sudo: yes
+  service:
+    name: docker
+    enabled: yes
+    state: started
+
+- name: Install pip, python-dev and unzip
+  sudo: yes
+  package:
+    name: "{{item}}"
+    state: present
+  with_items:
+  - "{{pydev_pkg}}"
+  - python-pip
+  - unzip
+
+- name: Upgrade pip, setup-tools, docker-py and docker-compose with pip
+  sudo: yes
+  pip:
+    name: "{{item}}"
+    state: present
+  with_items:
+    - pip
+    - setuptools
+    - docker-py
+    - docker-compose
+
+- name: Create docker group
+  sudo: yes
+  group: name=docker
+
+ # Weird...
+- name: Add vagrant user to docker group
+  sudo: yes
+  user:
+    name: vagrant
+    groups: docker
+    append: yes
+
+- name: Wait for docker socket.
+  sudo: yes
+  wait_for:
+    path: /var/run/docker.sock
+    state: present
+
+- name: Set docker socket permissions
+  sudo: yes
+  file:
+    path: /var/run/docker.sock
+    mode: 0660
+    owner: root
+    group: docker
+
+- name: Create powerci dir
+  sudo: yes
+  file: >
+    path=/var/powerci
+    state=directory
+    owner=1000
+    group=1000
+    mode=1755

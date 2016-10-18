@@ -1,0 +1,30 @@
+#! /bin/bash
+
+# Copyright IBM Corp, 2016
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+
+set -x
+
+if [ ! -f /var/local/ldap/.bootstrapped ]; then
+  mkdir /var/local/ldap/database
+  slapcat -f /etc/ldap/slapd.conf -l /var/local/ldap/.before.ldif
+  rm /var/local/ldap/database/__db.*
+  rm /var/local/ldap/database/*.bdb
+  rm /var/local/ldap/database/log.*
+  slapadd -v -f /etc/ldap/slapd.conf -l /var/local/ldap_files/bootstrap.ldif > /var/local/ldap/.slapdadd.log
+  slapcat -f /etc/ldap/slapd.conf -l /var/local/ldap/.after.ldif
+  touch /var/local/ldap/.bootstrapped
+fi
+
+slapd -h "ldap:// ldaps://" -f /etc/ldap/slapd.conf -d config -d conns -d packets

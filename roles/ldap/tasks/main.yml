@@ -1,0 +1,107 @@
+# Copyright IBM Corp, 2016
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for the specific language governing
+# permissions and limitations under the License.
+
+---
+- name: Create ldap directory
+  file: >
+    path=/var/powerci/ldap
+    state=directory
+    owner=1000
+    group=1000
+
+- name: Copy bootstrap.sh
+  copy: >
+    src=bootstrap.sh
+    dest=/var/powerci/ldap/bootstrap.sh
+    owner=1000
+    group=1000
+    mode=0775
+
+- name: Copy Dockerfile
+  copy: >
+    src=Dockerfile
+    dest=/var/powerci/ldap/Dockerfile
+    owner=1000
+    group=1000
+
+- name: Copy ca-chain from files
+  copy: >
+    src=./roles/ldap/files/ca-chain.cert.pem
+    dest=/var/powerci/ldap/ca-chain.cert.pem
+    owner=1000
+    group=1000
+    mode=0444
+
+- name: Copy certificate from files
+  copy: >
+    src=./roles/ldap/files/{{ ca_domain }}.cert.pem
+    dest=/var/powerci/ldap/{{ ca_domain }}.cert.pem
+    owner=1000
+    group=1000
+    mode=0444
+
+- name: Copy certificate key from files
+  copy: >
+    src=./roles/secret/files/{{ ca_domain }}.key.pem
+    dest=/var/powerci/ldap/{{ ca_domain }}.key.pem
+    owner=1000
+    group=1000
+    mode=0400
+
+- name: Render install_certificates template
+  template: >
+    src=./roles/ldap/templates/install_certificates.sh.j2
+    dest=/var/powerci/ldap/install_certificates.sh
+
+- name: Render slapd.conf template
+  template: >
+    src=./roles/ldap/templates/slapd.conf.j2
+    dest=/var/powerci/ldap/slapd.conf
+
+- name: Render ldap.conf template
+  template: >
+    src=./roles/ldap/templates/ldap.conf.j2
+    dest=/var/powerci/ldap/ldap.conf
+
+- name: Render bootstrap.ldif template
+  template: >
+    src=./roles/ldap/templates/bootstrap.ldif.j2
+    dest=/var/powerci/ldap/bootstrap.ldif
+
+- name: Render docker-compose template
+  template: >
+    src=./roles/ldap/templates/docker-compose.yml.j2
+    dest=/var/powerci/ldap/docker-compose.yml
+
+- name: Build ldap image
+  docker_service:
+    project_src: "{{ image.path }}"
+    project_name: ldap
+    build: yes
+    recreate: never
+
+- name: Run ldap container
+  docker_service:
+    project_src: "{{ image.path }}"
+    project_name: ldap
+    state: present
+    recreate: smart
+
+- name: Remove stopped containers
+  shell: docker rm `docker ps -q -f status=exited`
+  ignore_errors: True
+
+- name: Remove dangling images
+  shell: docker rmi `docker images -q -f dangling=true`
+  ignore_errors: True
