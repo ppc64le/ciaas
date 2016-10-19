@@ -39,8 +39,8 @@ TLSCertificateKeyFile /etc/ldap/{{ ca_domain }}.key.pem
 ##########################
 database hdb
 suffix "{{ ldap_root_dn }}"
-rootdn "{{ ldap_manager_cn }},{{ ldap_root_dn }}"
-rootpw {{ ldap_manager_password }}
+rootdn "{{ ldap_manager.cn }},{{ ldap_root_dn }}"
+rootpw {{ ldap_manager.passwd }}
 directory /var/local/ldap/database
 index objectClass,cn,uid,mail eq
 

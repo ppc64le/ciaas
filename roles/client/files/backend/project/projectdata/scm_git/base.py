@@ -19,8 +19,18 @@ from models import ScmGitModel
 
 
 class ScmGitData(AbstractProjectData):
+    """Project data implementing remote git repository."""
 
     def __init__(self, parent, formData):
+        """Constructor.
+
+        Args:
+            parent(Project): Project that owns this data.
+            formData(dict): Dict with this project data field's value.
+
+        Returns:
+            ScmGitData: the object holding this form data.
+        """
         self.form = ScmGitForm(formData)
         self.model = self.form.save(commit=False)
         self.model.parent = parent
@@ -28,13 +38,16 @@ class ScmGitData(AbstractProjectData):
         self.model.save()
 
     def getModel(self):
+        """Get the database model representation of scm git data."""
         return self.model
 
     def getForm(self):
+        """Get the form representation of scm git data."""
         return self.form
 
     @staticmethod
     def getBlankForm():
+        """Get a blank form of scm git data."""
         return ScmGitForm()
 
     def getData(self):
@@ -52,6 +65,7 @@ class ScmGitData(AbstractProjectData):
 
 
 class ScmGitForm(forms.ModelForm):
+    """Form representation of scm git data."""
 
     class Meta:
         model = ScmGitModel

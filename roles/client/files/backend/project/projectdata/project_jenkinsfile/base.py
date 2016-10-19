@@ -19,8 +19,19 @@ from models import ProjectJenkinsfileModel
 
 
 class ProjectJenkinsfileData(AbstractProjectData):
+    """Project data implementing pipeline project with Jenkinsfile scm
+    script. Not working due to JenkinsJobBuilder limitations."""
 
     def __init__(self, parent, formData):
+        """Constructor.
+
+        Args:
+            parent(Project): Project that owns this data.
+            formData(dict): Dict with this project data field's value.
+
+        Returns:
+            ProjectJenkinsfileData: this object holding the form data.
+        """
         self.form = ProjectJenkinsfileForm(formData)
         self.model = self.form.save(commit=False)
         self.model.parent = parent
@@ -28,13 +39,17 @@ class ProjectJenkinsfileData(AbstractProjectData):
         self.model.save()
 
     def getModel(self):
+        """Get the database model representation of project Jenkinsfile
+        data."""
         return self.model
 
     def getForm(self):
+        """Get the form representation of project Jenkinsfiel data."""
         return self.form
 
     @staticmethod
     def getBlankForm():
+        """Get a blank form of project Jenkinsfile data."""
         return ProjectJenkinsfileForm()
 
     def getData(self):
@@ -42,6 +57,7 @@ class ProjectJenkinsfileData(AbstractProjectData):
 
 
 class ProjectJenkinsfileForm(forms.ModelForm):
+    """Form representation of project Jenkinsfile data."""
 
     class Meta:
         model = ProjectJenkinsfileModel

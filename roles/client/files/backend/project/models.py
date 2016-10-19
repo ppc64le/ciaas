@@ -12,6 +12,8 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
+"""Database models for project app."""
+
 from __future__ import unicode_literals
 
 from django.db import models
@@ -29,6 +31,17 @@ import partner.utils
 
 
 def _vessel(data):
+    """Create a vessel to keep data.
+
+    Return an empty list or an dict, accordingly with the type of the argument
+    data. Use when generating the project data representation.
+
+    Args:
+        data(list or dict): object that _vessel has to imitate (return empty
+            structure of same type).
+
+    Return:
+        list or dict: empty structure of same type as argument data."""
     if isinstance(data, list):
         return []
     elif isinstance(data, dict):
@@ -38,6 +51,15 @@ def _vessel(data):
 
 
 def _fill(vessel, content):
+    """Fill a vessel with provided content.
+
+    If the vessel is a dict, so the vessel is update with content values.
+    If the vessel is a list, so the vessel is extended with content values.
+    vessel and content must be of same type.
+
+    Args:
+        vessel(list or dict): data structure to store content values.
+        content(list or dict): collection of value to be added to vessel."""
     if isinstance(content, list):
         vessel.extend(content)
     elif isinstance(content, dict):
@@ -47,6 +69,7 @@ def _fill(vessel, content):
 
 
 def _convert(data):
+    """Converts all items of a collection to string."""
     if isinstance(data, basestring):
         return str(data)
     elif isinstance(data, collections.Mapping):
@@ -57,17 +80,8 @@ def _convert(data):
         return data
 
 
-def _compairBuildsTimestamp(x, y):
-    if x['timestamp'] == y['timestamp']:
-        return 0
-    elif x['timestamp'] < y['timestamp']:
-        return 1
-    else:
-        return -1
-
-
-# Create your models here.
 class Project(models.Model):
+    """Database model for projects."""
 
     NODE_CHOICES = (
         ('any', 'Any'),
@@ -83,6 +97,7 @@ class Project(models.Model):
     lastBuildRefresh = None
 
     def lastBuild(self):
+        """Get the status of the last build."""
         self._refreshBuildInformation()
         try:
             lastStatus = self.builds[0]['result']
@@ -91,10 +106,12 @@ class Project(models.Model):
         return lastStatus
 
     def builds(self):
+        """Get all builds in a dict."""
         self._refreshBuildInformation()
         return self.builds
 
     def getData(self):
+        """Get project data representation."""
         dataRepresentation = {
             'job': {
                 'name': self.name,
@@ -117,6 +134,7 @@ class Project(models.Model):
         return [_convert(dataRepresentation)]
 
     def _refreshBuildInformation(self):
+        """Reload build information when it is old."""
         if self.lastBuildRefresh is None or \
                 (datetime.datetime.today() -
                  self.lastBuildRefresh).seconds >= 4:
@@ -124,6 +142,7 @@ class Project(models.Model):
             self.lastBuildRefresh = datetime.datetime.today()
 
     def triggerBuild(self):
+        """Trigger project build."""
         gclient = utils.getGearClientConnection()
 
         if len(self.nodes) == 0 or \
@@ -141,6 +160,7 @@ class Project(models.Model):
 
     @staticmethod
     def getForms(projType):
+        """Get all forms related to this project."""
         dataManager = DataManager.get()
         forms = [ProjectForm()]
         forms.extend(
@@ -151,17 +171,21 @@ class Project(models.Model):
 
 
 class ProjectForm(forms.ModelForm):
+    """Project form."""
     class Meta:
         model = Project
         fields = ['name', 'nodes']
 
 
 class Data(models.Model):
+    """Base model for project decoration."""
     parent = models.ForeignKey(Project, on_delete=models.CASCADE)
     type = models.CharField(max_length=40)
 
     def getPath(self):
+        """Get decorator path in data representation."""
         return getattr(self, self.type).getPath()
 
     def getData(self):
+        """Get data representation."""
         return getattr(self, self.type).getData()

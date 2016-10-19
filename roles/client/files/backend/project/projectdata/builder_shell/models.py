@@ -17,13 +17,16 @@ import project.models as pmodels
 
 
 class BuilderShellModel(pmodels.Data):
+    """Database model representation of builder shell data."""
     script = models.TextField()
 
     @staticmethod
     def getPath():
+        """Builder shell data path inside project data representation."""
         return 'job.builders'
 
     def getData(self):
+        """Get builder shell data representation."""
         return [{
             'shell': self.script
         }]

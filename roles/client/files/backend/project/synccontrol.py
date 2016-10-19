@@ -12,6 +12,8 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
+"""Controls sync of projects with satellite nodes."""
+
 from django.conf import settings
 from jenkins_jobs.builder import Builder as JenkinsJobBuilder
 from tempfile import TemporaryFile
@@ -26,13 +28,23 @@ import partner
 
 
 class SyncProjectsThread(threading.Thread):
+    """Thread to run the sync."""
 
     def __init__(self, newProjects):
+        """SyncProjectsThread constructor.
+
+        Args:
+            newProjects(list of projects): list of projects to sync.
+
+        Return:
+            Thread: thread to sync projects."""
         super(SyncProjectsThread, self).__init__()
         self.jobs = [str(j.name) for j in models.Project.objects.all()]
         self.newProjects = set(newProjects)
 
     def run(self):
+        """Sync logic."""
+
         nodes = partner.utils.getOnlineNodes()
 
         if settings.REMOVE_DANGLING_PROJECTS:
@@ -48,6 +60,7 @@ class SyncProjectsThread(threading.Thread):
                 node.disconnect()
 
     def _syncRemovedProjects(self, jconn):
+        """Remove on satellite nodes deleted jobs."""
         nodeJobs = [str(job['name']) for job in jconn.get_jobs()]
 
         for nodeJob in nodeJobs:
@@ -55,8 +68,9 @@ class SyncProjectsThread(threading.Thread):
                 jconn.delete_job(nodeJob)
 
     def _syncNewProjects(self, node):
+        """Update on satellite nodes new or changed jobs."""
         jenkinsUrl = partner.utils.JENKINS_URL \
-                     % {'host': node.host, 'port': node.port}
+            % {'host': node.host, 'port': node.port}
 
         builder = JenkinsJobBuilder(jenkinsUrl,
                                     node.conn['user'],
@@ -75,20 +89,24 @@ class SyncProjectsThread(threading.Thread):
 
 
 class SyncControl(object):
+    """Sync controller."""
 
     DEFAULT_PROJECT_SYNC_INTERVAL = 60  # 1 minute
     _instance = None
 
     def __init__(self):
         self.newProjects = []
+        # Really old date for first check.
         self.lastSync = datetime.datetime(1991, 10, 12, 3, 20)
         self.syncInterval = SyncControl.DEFAULT_PROJECT_SYNC_INTERVAL
 
     def isTimeToSync(self):
+        """Check if last sync is old enough."""
         return (datetime.datetime.today() - self.lastSync).seconds > \
             self.syncInterval
 
-    def syncRemovedProjects(self, newProject):
+    def syncProjects(self, newProject):
+        """Cache projects to sync and trigger sync when it is time to sync."""
         if newProject is not None:
             self.newProjects.append(newProject)
 
@@ -102,8 +120,9 @@ class SyncControl(object):
 
     @classmethod
     def sync(cls, projectToSync=None):
+        """Cache projects to sync and trigger sync when it is time to sync."""
         try:
-            cls._instance.syncRemovedProjects(projectToSync)
+            cls._instance.syncProjects(projectToSync)
         except:
             cls._instance = cls()
-            cls._instance.syncRemovedProjects(projectToSync)
+            cls._instance.syncProjects(projectToSync)

@@ -21,6 +21,7 @@ from client import settings
 
 
 def getGearClientConnection():
+    """Get client connection to gearman."""
     gclient = gear.Client()
     gclient.addServer(settings.GEARMAN_HOST)
     gclient.waitForServer()
@@ -28,6 +29,21 @@ def getGearClientConnection():
 
 
 def gearJobFactory(action, projName, label=None, params=None):
+    """Get gearman Job.
+
+    Instantiates a gearman Job to do some action upon some project optionally
+    using specific labels.
+
+    Args:
+        action(string): Action to take. Usually is \"build\".
+        projName(string): Project affected by action.
+        label(string, optional): Specific label to target the Job.
+            Defaults to None.
+        params(dict, optional): Dictionary with Job parameters.
+            Defaults to None.
+
+    Return:
+        gear.Job: Gearman Job describing the requested function."""
     assert isinstance(action, basestring), "action is not string: %r" % action
     assert isinstance(projName, basestring), "projName is not string: %r" \
                                              % projName

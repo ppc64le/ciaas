@@ -115,6 +115,7 @@ class Node(models.Model):
         return "online"
 
     def _lock(self):
+        """Lock access to Jenkins instance."""
         try:
             Node.locks[self.id].acquire(True)
         except:
@@ -122,4 +123,5 @@ class Node(models.Model):
             Node.locks[self.id].acquire()
 
     def _unlock(self):
+        """Unlock access to Jenkins instance."""
         Node.locks[self.id].release()

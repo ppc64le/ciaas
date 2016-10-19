@@ -19,7 +19,6 @@ import gear
 import ldap
 import ldap.modlist as modlist
 import pytz
-import re
 import threading
 import time
 
@@ -32,6 +31,19 @@ JENKINS_URL = 'http://%(host)s:%(port)s/'
 
 
 def getJenkinsUser(partner, usingPassword=None, isAdmin=False):
+    """Get the Jenkins credentials of a partner.
+
+    Args:
+        partner(Partner): The partner that owns the credential.
+        usingPassword(string, optional): Desired password to use.
+            Defaults to None.
+        idAdmin(bool, optional): Whether return the admin user or regular user.
+            Defaults to None.
+
+    Returns:
+        Tuple(string, string, string): This method returns a tuple following:
+            username, password, hashedPassword.
+    """
     jUser = None
     jPassword = None
 
@@ -65,6 +77,13 @@ def getJenkinsUser(partner, usingPassword=None, isAdmin=False):
 
 
 def _changePassword(dn, oldHash, newHash):
+    """Changes an user password.
+
+    Args:
+        dn(string): User full distinguished name in LDAP database.
+        oldHash(string): The password hash already in the database.
+        newHash(string): The new hash to save on database.
+    """
     ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
     ldap.set_option(ldap.OPT_X_TLS_CACERTFILE, settings.LDAP_CACERTFILE)
     l = ldap.initialize(secret.LDAP_URI)
@@ -89,32 +108,8 @@ class WorkersAdminRequest(gear.AdminRequest):
         super(WorkersAdminRequest, self).__init__()
 
 
-def getJenkinsFromGearman(gclient):
-    workersAdminRequest = WorkersAdminRequest()
-    gclient.getConnection().sendAdminRequest(workersAdminRequest)
-    workersAdminRequest.waitForResponse()
-
-    response = str(workersAdminRequest.response)
-    iplist = list(re.findall(r'(?:[0-9]{1,3}\.){3}[0-9]{1,3}', response))
-
-    # Remove client IPs from list.
-    for match in re.findall(r'(?:[0-9]{1,3}\.){3}[0-9]{1,3} - ', response):
-        iplist.remove(match[:-3])
-
-    # list( set( anylist ) ) removes repeated elements from anylist.
-    return list(set(iplist))
-
-
-def getNodesIpList():
-    gclient = gear.Client()
-    gclient.addServer(settings.GEARMAN_HOST)
-    gclient.waitForServer()
-    jenkinsIPList = getJenkinsFromGearman(gclient)
-    gclient.shutdown()
-    return jenkinsIPList
-
-
 def getOnlineNodes():
+    """Get a list of online and unblocked nodes."""
     nodes = models.Node.objects.filter(site__active=True)
     onlineNodes = []
 
@@ -125,16 +120,18 @@ def getOnlineNodes():
     return onlineNodes
 
 
-def _compairBuildsTimestamp(x, y):
-    if x['timestamp'] == y['timestamp']:
-        return 0
-    elif x['timestamp'] < y['timestamp']:
-        return 1
-    else:
-        return -1
-
-
 def getBuildInformation(jobName):
+    """Get all builds info of a project.
+
+    Get all builds information of a project from all nodes ordered by build
+    timestamp.
+
+    Args:
+        jobName(string): Name of project.
+
+    Returns:
+        list: List of build info organized in dicts.
+    """
     nodes = getOnlineNodes()
     bvalues = []
     builds = {}
@@ -195,6 +192,7 @@ class AsyncBuildInfoGetter(threading.Thread):
 
 
 class AsyncGetBuildInfo(AsyncBuildInfoGetter):
+    """Asynchronously downloads build information."""
 
     def run(self):
         for b in self.rawbuilds:
@@ -215,6 +213,7 @@ class AsyncGetBuildInfo(AsyncBuildInfoGetter):
 
 
 class AsyncGetBuildConsoleOutput(AsyncBuildInfoGetter):
+    """Asynchronously downloads build logs."""
 
     def run(self):
         for b in self.rawbuilds:

@@ -19,8 +19,19 @@ from models import ProjectWorkflowModel
 
 
 class ProjectWorkflowData(AbstractProjectData):
+    """Project data implementing workflow job with inline DSL script.
+    Not working due to incompatibility with gearman."""
 
     def __init__(self, parent, formData):
+        """Constructor.
+
+        Args:
+            parent(Project): Project that owns this data.
+            formData(dict): Dict with this project data field's value.
+
+        Returns:
+            ProjectWorkflowData: thie object holdingthe form data.
+        """
         self.form = ProjectWorkflowForm(formData)
         self.model = self.form.save(commit=False)
         self.model.parent = parent
@@ -28,13 +39,16 @@ class ProjectWorkflowData(AbstractProjectData):
         self.model.save()
 
     def getModel(self):
+        """Get the database model representation of project workflow data."""
         return self.model
 
     def getForm(self):
+        """Get the form representation of project workflow data."""
         return self.form
 
     @staticmethod
     def getBlankForm():
+        """Get a blank form of project workflow data."""
         return ProjectWorkflowForm()
 
     def getData(self):
@@ -42,6 +56,7 @@ class ProjectWorkflowData(AbstractProjectData):
 
 
 class ProjectWorkflowForm(forms.ModelForm):
+    """Form representation of project workflow data."""
 
     class Meta:
         model = ProjectWorkflowModel

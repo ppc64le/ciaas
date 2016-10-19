@@ -19,8 +19,18 @@ from models import BuilderShellModel
 
 
 class BuilderShellData(AbstractProjectData):
+    """Project data implementing inline shell script for build and test."""
 
     def __init__(self, parent, formData):
+        """Constructor.
+
+        Args:
+            parent(Project): Project that owns this data.
+            formData(dict): Dict with this project data field's value.
+
+        Returns:
+            BuilderShellData: the object holding the form data.
+        """
         self.form = BuilderShellForm(formData)
         self.model = self.form.save(commit=False)
         self.model.parent = parent
@@ -28,13 +38,16 @@ class BuilderShellData(AbstractProjectData):
         self.model.save()
 
     def getModel(self):
+        """Get the database model representation of builder shell data."""
         return self.model
 
     def getForm(self):
+        """Get the form representation of builder shell data."""
         return self.form
 
     @staticmethod
     def getBlankForm():
+        """Get a blank form of builder shell data."""
         return BuilderShellForm()
 
     def getData(self):
@@ -46,6 +59,7 @@ class BuilderShellData(AbstractProjectData):
 
 
 class BuilderShellForm(forms.ModelForm):
+    """Form representation of builder shell data."""
 
     class Meta:
         model = BuilderShellModel

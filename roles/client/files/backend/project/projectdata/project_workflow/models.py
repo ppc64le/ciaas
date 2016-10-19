@@ -17,13 +17,16 @@ import project.models as pmodels
 
 
 class ProjectWorkflowModel(pmodels.Data):
+    """Database model representation of project workflow data."""
     script = models.TextField('DSL Script')
 
     @staticmethod
     def getPath():
+        """Project workflow data path inside project data representation."""
         return 'job'
 
     def getData(self):
+        """Get project workflow data representation."""
         return {
             'project-type': 'workflow',
             'sandbox': 'false',

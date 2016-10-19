@@ -12,24 +12,53 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
+"""Controls settings of new project data."""
+
 import importlib
 
 
 def _importClass(classPath):
+    """Import a class from path."""
     lastDot = classPath.rfind('.')
     dataModule = classPath[:lastDot]
     dataClass = classPath[lastDot+1:]
     return importlib.import_module(dataModule).__dict__[dataClass]
 
 DATA_LIST = {}
+"""List of project data classes to import, grouped by project type.
+
+Example:
+    DATA_LIST = {
+        'project_type_1': [
+            'package.path.ProjectDataClass1',
+            'another.package.path.ProjectDataClass2',
+        ],
+        'project_type_2': [
+            'package.path.ProjectDataClass1',
+            'package.path.ProjectDataClass3',
+            'another.package.path.ProjectDataClass4',
+        ],
+    }
+"""
+
 PROJECT_TYPES = {}
+"""Available project types and its descriptions.
+
+Example:
+    PROJECT_TYPES = {
+        'project_type_1': 'Create project using inline shell script.',
+        'project_type_2': 'Create project using maven project.',
+    }
+"""
 
 
 class DataManager(object):
+    """Manages project data."""
 
     _instance = None
 
     def __init__(self):
+        """Constructor."""
         if DataManager._instance is not None:
             raise TypeError('DataManager has already an instance.\
                     Use DataManager.get() to get the instance.')
@@ -38,10 +67,13 @@ class DataManager(object):
         DataManager._instance = self
 
         # Object parameters
+
+        # Bring PROJECT_TYPES inside the DataManager.
         self.projectTypes = []
         for proj_type in PROJECT_TYPES.keys():
             self.projectTypes.append((proj_type, PROJECT_TYPES[proj_type]))
 
+        # Import project data.
         self.dataList = {}
         for proj_type in DATA_LIST.keys():
             k_array = [data[data.rfind('.')+1:-4].lower()
@@ -51,6 +83,7 @@ class DataManager(object):
 
     @staticmethod
     def get():
+        """Singleton instance getter."""
         if DataManager._instance is None:
             return DataManager()
         else:

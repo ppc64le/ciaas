@@ -17,14 +17,17 @@ import project.models as pmodels
 
 
 class ScmGitModel(pmodels.Data):
+    """Database model representation of scm git data."""
     url = models.URLField()
     branch = models.CharField(max_length=60)
 
     @staticmethod
     def getPath():
+        """Scm git data path inside project data representation."""
         return 'job.scm'
 
     def getData(self):
+        """Get scm git data representation."""
         return [{
             'git': {
                 'url': self.url,

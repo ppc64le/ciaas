@@ -7,7 +7,7 @@
 
 BASE	{{ ldap_root_dn }}
 URI	ldap://localhost
-BINDDN {{ ldap_manager_cn }},{{ ldap_root_dn }}
+BINDDN {{ ldap_manager.cn }},{{ ldap_root_dn }}
 
 SIZELIMIT 0
 TIMELIMIT 0

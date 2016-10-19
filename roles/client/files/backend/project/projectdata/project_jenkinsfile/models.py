@@ -17,6 +17,7 @@ import project.models as pmodels
 
 
 class ProjectJenkinsfileModel(pmodels.Data):
+    """Database model representation of project Jenkinsfile data."""
     gitUrl = models.URLField('Git URL')
     branch = models.CharField(max_length=60)
     scriptPath = models.CharField('Script path',
@@ -25,9 +26,11 @@ class ProjectJenkinsfileModel(pmodels.Data):
 
     @staticmethod
     def getPath():
+        """Project Jenkinsfile data path inside project data representation."""
         return 'job'
 
     def getData(self):
+        """Get project Jenkinsfile data representation."""
         rawxml = \
             '<properties><org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty><triggers/></org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty></properties><definition class="org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition" plugin="workflow-cps@2.12"><scm class="hudson.plugins.git.GitSCM" plugin="git@2.5.3"><configVersion>2</configVersion><userRemoteConfigs><hudson.plugins.git.UserRemoteConfig><url>%(git_url)s</url></hudson.plugins.git.UserRemoteConfig></userRemoteConfigs><branches><hudson.plugins.git.BranchSpec><name>%(branch)s</name></hudson.plugins.git.BranchSpec></branches><doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations><submoduleCfg class="list"/><extensions/></scm><scriptPath>%(script_path)s</scriptPath></definition>' % {  # NOQA
                 'git_url': self.gitUrl,

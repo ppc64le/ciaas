@@ -12,6 +12,8 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
+"""Implements new template filters."""
+
 from copy import deepcopy
 from django import template
 
@@ -21,6 +23,7 @@ register = template.Library()
 
 @register.filter
 def reject(value, arg):
+    """Reject an item from list."""
     assert isinstance(value, list), "value must be a list: %r" % value
     assert isinstance(arg, basestring), "arg must be a string: %r" % arg
     value_copy = deepcopy(value)

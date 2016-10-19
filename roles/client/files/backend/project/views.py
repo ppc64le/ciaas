@@ -12,6 +12,8 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
+"""Project views."""
+
 from django import forms
 from django.contrib.auth.decorators import login_required
 from django.core import urlresolvers
@@ -33,6 +35,11 @@ import models
 
 
 def _updateJenkinsJob(jobDescription):
+    """Update a project in all Jenkins instances.
+
+    Args:
+        jobDescription(dict): Description of the project in dict form.
+    """
     nodes = partner.utils.getOnlineNodes()
 
     tempFile = TemporaryFile()
@@ -57,6 +64,14 @@ def _updateJenkinsJob(jobDescription):
 
 @login_required
 def selectProjectType(request):
+    """Allow user to select a project type.
+
+    Args:
+        request(HttpRequest): The user request.
+
+    Returns:
+        HttpRestponse: The rendered list of project types.
+    """
     dataManager = DataManager.get()
     context = {
         'project_types': dataManager.projectTypes,
@@ -66,6 +81,21 @@ def selectProjectType(request):
 
 @login_required
 def create(request, projType):
+    """Create a new project.
+
+    If the request contains no data about the project so the view returns a
+    blank project form to the user. But if the request has data related to a
+    project so the new project is created on the local database and on all
+    registered Jenkins instances.
+
+    Args:
+        request(HttpRequest): The user request.
+        projType(string): The type of the project.
+
+    Returns:
+        HttpResponse: A blank project form if request has no project data or
+            a success message if request has valid project data.
+    """
     keys = request.POST.keys()
     if len(keys) == 0:
         return _createBlankForm(request, projType)
@@ -96,6 +126,7 @@ def create(request, projType):
 
 
 def _createBlankForm(request, projType):
+    """Render a blank project form accordingly to project type."""
     context = {
         'forms': models.Project.getForms(projType),
     }
@@ -104,6 +135,14 @@ def _createBlankForm(request, projType):
 
 @login_required
 def list(request):
+    """List all projects of active user.
+
+    Args:
+        request(HttpRequest): The user request.
+
+    Returns:
+        HttpResponse: Rendered project list.
+    """
     tabs = request.GET.get('tabs', "").split('!')
     active = request.GET.get('active', "")
     try:
@@ -118,20 +157,22 @@ def list(request):
 
 @login_required
 def update(request):
+    """Not implemented yet."""
     return Http404()
-
-
-def _compairBuildsTimestamp(x, y):
-    if x['timestamp'] == y['timestamp']:
-        return 0
-    elif x['timestamp'] < y['timestamp']:
-        return 1
-    else:
-        return -1
 
 
 @login_required
 def delete(request, projName):
+    """Delete a project from local database and all registered Jenkins
+    instances.
+
+    Args:
+        request(HttpRequest): The user request.
+        projName(string): Name of the project to delete.
+
+    Returns:
+        HttpResponseRedirect: Redirects user to project list page.
+    """
     nodes = partner.utils.getOnlineNodes()
 
     for node in nodes:
@@ -149,6 +190,15 @@ def delete(request, projName):
 
 @login_required
 def buildProject(request, projName):
+    """Manually trigger a project build.
+
+    Args:
+        request(HttpRequest): The user request.
+        projName(string): The name of the project to build.
+
+    Returns:
+        HttpResponse: Just an ok.
+    """
     proj = models.Project.objects.get(name=projName)
     assert proj is not None, "No project found with name %s." % projName
     proj.triggerBuild()
@@ -160,6 +210,15 @@ def buildProject(request, projName):
 
 # Does not working
 def abortBuild(request, projName):
+    """Aborts a project build. Not working.
+
+    Args:
+        request(HttpRequest): The user request.
+        projName(string): Name of the project to abort build.
+
+    Returns:
+        HttpResponse: Just an ok.
+    """
     gclient = gear.Client()
     gclient.addServer(settings.GEARMAN_HOST)
     gclient.waitForServer()

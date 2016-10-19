@@ -12,6 +12,8 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
+"""Partner views."""
+
 from ansible.parsing.vault import VaultLib
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core import urlresolvers
@@ -31,6 +33,15 @@ import utils
 
 @staff_member_required
 def block(request, pid):
+    """Blocks a partners in CIaaS network.
+
+    Args:
+        request(HttpRequest): The user request.
+        pid(int): Partner database id number.
+
+    Returns:
+        HttpResponseRedirect: Redirects to partner list page.
+    """
     partner = models.Partner.objects.get(id=pid)
     if partner.active:
         partner.active = False
@@ -40,6 +51,15 @@ def block(request, pid):
 
 @staff_member_required
 def unblock(request, pid):
+    """Unblocks a partners in CIaaS network.
+
+    Args:
+        request(HttpRequest): The user request.
+        pid(int): Partner database id number.
+
+    Returns:
+        HttpResponseRedirect: Redirects to partner list page.
+    """
     partner = models.Partner.objects.get(id=pid)
     if not partner.active:
         partner.active = True
@@ -49,6 +69,20 @@ def unblock(request, pid):
 
 @ensure_csrf_cookie
 def registerNode(request):
+    """Register a Jenkins instance in database.
+
+    If the user does a GET request this view just send back the csfr_token
+    in the cookies. If the user does a POST request and send in the request
+    body the node properties so the node is registered on the database.
+
+    Args:
+        request(HttpRequest): The user request.
+
+    Returns:
+        If the user does a GET or a POST request, it returns an HttpResponse
+            with 'ok' message and csfr_token in the cookies.
+        If it is neither a GET nor a POST request an Http404 is returned.
+    """
     if request.method == 'GET':
         return HttpResponse('ok')
     elif request.method != 'POST':
@@ -91,7 +125,19 @@ def registerNode(request):
     return HttpResponse('ok')
 
 
+# The artifacts term here is ambiguous given the artifacts term used with
+# the encrypted yaml with credentials information. Here is not the generation
+# of the file, but the very first generation of the credentials itself.
 def _generatePartnerArtifacts(partner, nodeAmount):
+    """Creates partner credentials on LDAP database and create the nodes.
+
+    Args:
+        partner(Partner): New partner instance.
+        nodeAmount(int): How many Jenkins nodes this partner will keep.
+
+    Returns:
+        bool: Always returns True.
+    """
     # Create partner jenkins account
     passwd = account.utils.randomPassword()
     passwd = account.utils.hashPassword(passwd)
@@ -122,9 +168,18 @@ def _generatePartnerArtifacts(partner, nodeAmount):
     return True
 
 
-# Security fault :(
-# This method publishs all partners jenkins addresses
+# Security fault :( try to allow only requests under https.
+# This method publishs all partner's jenkins addresses
 def whitelist(request):
+    """Generates a list with all Jenkins addresses.
+
+    Args:
+        request(HttpRequest): The user request.
+
+    Returns:
+        HttpResponse: list of Jenkins addresses.
+    """
+    # TODO: Filter nodes of blocked partners.
     nodes = models.Node.objects.all()
     ips = []
     for node in nodes:
@@ -137,6 +192,20 @@ def whitelist(request):
 
 @staff_member_required
 def newPartner(request):
+    """Creates a new partner.
+
+    If the request contains no data about the partner so the view returns a
+    blank partner form to the user. But if the request has valid data related
+    to the partner so the new parner is created and its credentials are saved
+    to the LDAP database.
+
+    Args:
+        request(HttpRequest): The user request.
+
+    Returns:
+        HttpResponse: A blank partner form if request has no partner related
+            data or a success message if the request has a valid partner data.
+    """
     keys = request.POST.keys()
     if len(keys) == 0:
         context = {
@@ -160,6 +229,14 @@ def newPartner(request):
 
 @staff_member_required
 def list(request):
+    """List all partners.
+
+    Args:
+        request(HttpRequest): The user request.
+
+    Returns:
+        HttpResponse: Rendered list with all partners.
+    """
     context = {
         'partners': models.Partner.objects.all(),
     }
@@ -168,6 +245,16 @@ def list(request):
 
 @staff_member_required
 def artifacts(request, pid):
+    """Generates a new partner artifacts file.
+
+    Args:
+        request(HttpsRequest): The user request.
+        pid(int): The partner database id number.
+
+    Returns:
+        HttpResponse: An encrypted yaml file with partner's credentials to
+            access Jenkins.
+    """
     if len(request.POST.keys()) > 0:
         vaultPasswd = str(request.POST.get('vault_password'))
     else:
