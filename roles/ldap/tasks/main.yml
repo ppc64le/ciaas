@@ -17,46 +17,46 @@
   file: >
     path=/var/powerci/ldap
     state=directory
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
 
 - name: Copy bootstrap.sh
   copy: >
     src=bootstrap.sh
     dest=/var/powerci/ldap/bootstrap.sh
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
     mode=0775
 
 - name: Copy Dockerfile
   copy: >
     src=Dockerfile
     dest=/var/powerci/ldap/Dockerfile
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
 
 - name: Copy ca-chain from files
   copy: >
     src=./roles/ldap/files/ca-chain.cert.pem
     dest=/var/powerci/ldap/ca-chain.cert.pem
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
     mode=0444
 
 - name: Copy certificate from files
   copy: >
     src=./roles/ldap/files/{{ ca_domain }}.cert.pem
     dest=/var/powerci/ldap/{{ ca_domain }}.cert.pem
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
     mode=0444
 
 - name: Copy certificate key from files
   copy: >
     src=./roles/secret/files/{{ ca_domain }}.key.pem
     dest=/var/powerci/ldap/{{ ca_domain }}.key.pem
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
     mode=0400
 
 - name: Render install_certificates template

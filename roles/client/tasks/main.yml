@@ -27,8 +27,8 @@
   get_url: >
     url=http://materializecss.com/bin/materialize-v{{ materialize_version }}.zip
     dest=/var/powerci/client/materialize-v{{ materialize_version }}.zip
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
 
 - name: Unzip materialize-css
   shell: "unzip -o /var/powerci/client/materialize-v{{ materialize_version }}.zip"
@@ -50,8 +50,8 @@
     src=/var/powerci/client/materialize/css/materialize.min.css
     dest=/var/powerci/client/backend/static/css/materialize.min.css
     remote_src=True
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
 
 - name: Create roboto fonts directory
   file: >
@@ -63,8 +63,8 @@
     src=/var/powerci/client/materialize/fonts/roboto/{{ item }}
     dest=/var/powerci/client/backend/static/fonts/roboto/{{ item }}
     remote_src=True
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
   with_items:
     - Roboto-Bold.eot
     - Roboto-Bold.ttf
@@ -93,15 +93,15 @@
     src=/var/powerci/client/materialize/js/materialize.min.js
     dest=/var/powerci/client/backend/static/js/materialize.min.js
     remote_src=True
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
 
 - name: Download jquery
   get_url: >
     url=https://code.jquery.com/jquery-{{ jquery_version }}.min.js
     dest=/var/powerci/client/backend/static/js/jquery-{{ jquery_version }}.min.js
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
 
 - name: Render Dockerfile
   template: >
@@ -122,44 +122,44 @@
   copy: >
     src=id_rsa
     dest=/var/powerci/client/id_rsa
-    owner=1000
+    owner={{ ansible_user }}
     mode=0600
 
 - name: Copy public ssh key
   copy: >
     src=id_rsa.pub
     dest=/var/powerci/client/id_rsa.pub
-    owner=1000
+    owner={{ ansible_user }}
     mode=0644
 
 - name: Copy private certificate key
   copy: >
     src=./roles/secret/files/{{ client_private_cert_key }}
     dest=/var/powerci/client/{{ client_private_cert_key }}
-    owner=1000
+    owner={{ ansible_user }}
     mode=0400
 
 - name: Copy OpenPower CIaaS Client certificate
   copy: >
     src={{ client_certificate }}
     dest=/var/powerci/client/{{ client_certificate }}
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
     mode=0444
 
 - name: Copy ca-chain certificate
   copy: >
     src=./roles/ldap/files/ca-chain.cert.pem
     dest=/var/powerci/client/ca-chain.cert.pem
-    owner=1000
+    owner={{ ansible_user }}
     mode=0444
 
 - name: Copy bootstrap.sh
   copy: >
     src=bootstrap.sh
     dest=/var/powerci/client/bootstrap.sh
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
 
 - name: Render settings template
   template: >

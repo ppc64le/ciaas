@@ -18,3 +18,5 @@ debian_ports:
 
 ubuntu_ports:
   - 22100
+
+ansible_user: 1000

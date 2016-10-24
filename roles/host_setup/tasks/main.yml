@@ -111,6 +111,6 @@
   file: >
     path=/var/powerci
     state=directory
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
     mode=1755

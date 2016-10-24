@@ -27,3 +27,5 @@ ca_orgunit: ""
 ca_contact: "Davi Diorio Mendes"
 ca_email: "ddiorio@br.ibm.com"
 ca_optname: ""
+
+ansible_user: 1000

@@ -13,11 +13,4 @@
 # permissions and limitations under the License.
 
 ---
-materialize_version: 0.97.7
-jquery_version: 2.1.1
-client_private_cert_key: iris.aus.stglabs.ibm.com.key.pem
-client_certificate: iris.aus.stglabs.ibm.com.cert.pem
-
-remove_dangling_projects: True
-
 ansible_user: 1000

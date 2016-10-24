@@ -17,22 +17,22 @@
   file: >
     path=/var/powerci/gearmand
     state=directory
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
 
 - name: Copy entrypoint.sh
   copy: >
     src=entrypoint.sh
     dest=/var/powerci/gearmand/entrypoint.sh
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
     mode=775
 
 - name: Copy authorized_keys file
   copy: >
     src=./roles/gearmand/files/authorized_keys
     dest=/var/powerci/gearmand/authorized_keys
-    owner=1000
+    owner={{ ansible_user }}
     mode=0644
 
 - name: Render iptables_setup template

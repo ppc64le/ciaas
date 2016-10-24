@@ -17,15 +17,15 @@
   file: >
     path=/var/powerci/jenkins
     state=directory
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
 
 - name: Create repo directory
   file: >
     path=/var/powerci/jenkins/repo
     state=directory
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
 
 - name: Checkout jenkins files
   git: >
@@ -38,8 +38,8 @@
     src=/var/powerci/jenkins/repo/{{ item.name }}
     dest=/var/powerci/jenkins/{{ item.name }}
     remote_src=True
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
     mode={{ item.mode }}
   with_items:
     - {name: 'Dockerfile',  mode: '0644'}
@@ -49,8 +49,8 @@
 
 - name: Copy jenkins plugins
   copy: >
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
     src={{ item }}-plugin.txt
     dest=/var/powerci/jenkins/{{ item }}-plugin.txt
   with_items:
@@ -73,28 +73,28 @@
   register: removed_plugins
 
 - name: Generate jenkins-plugins.txt
-  shell: cat /var/powerci/jenkins/*-plugin.txt | sort -u | grep -v \# > /var/powerci/jenkins/jenkins-plugins.txt && chown 1000:1000 /var/powerci/jenkins/jenkins-plugins.txt
+  shell: cat /var/powerci/jenkins/*-plugin.txt | sort -u | grep -v \# > /var/powerci/jenkins/jenkins-plugins.txt && chown {{ ansible_user }}:{{ ansible_user }} /var/powerci/jenkins/jenkins-plugins.txt
   when: plugins|changed or removed_plugins|changed
 
 - name: Copy ldap.conf
   copy: >
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
     src=ldap.conf
     dest=/var/powerci/jenkins/ldap.conf
 
 - name: Copy private ssh key
   copy: >
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
     src=id_rsa
     dest=/var/powerci/jenkins/id_rsa
     mode=0600
 
 - name: Copy public ssh key
   copy: >
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
     src=id_rsa.pub
     dest=/var/powerci/jenkins/id_rsa.pub
     mode=0644
@@ -103,32 +103,32 @@
   copy: >
     src=configure_credentials.groovy
     dest=/var/powerci/jenkins/configure_credentials.groovy
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
   register: credentials
 
 - name: Render configure_gearmand template
   template: >
     src=./roles/jenkins/templates/configure_gearman.groovy.j2
     dest=/var/powerci/jenkins/configure_gearman.groovy
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
   register: gearmand
 
 - name: Render configure_ldap template
   template: >
     src=./roles/jenkins/templates/configure_ldap.groovy.j2
     dest=/var/powerci/jenkins/configure_ldap.groovy
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
   register: ldap
 
 - name: Render configure_slave template
   template: >
     src=./roles/jenkins/templates/configure_slaves.groovy.j2
     dest=/var/powerci/jenkins/configure_slaves.groovy
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
   register: slave
 
 - name: Patch Dockerfile
@@ -140,13 +140,13 @@
   template: >
     src=docker-compose.yml.j2
     dest=/var/powerci/jenkins/docker-compose.yml
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
 
 - name: Copy ca-chain certificate
   copy: >
-    owner=1000
-    group=1000
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
     src=./roles/ldap/files/ca-chain.cert.pem
     dest=/var/powerci/jenkins/ca-chain.cert.pem
     mode=0644
