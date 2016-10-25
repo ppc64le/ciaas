@@ -40,6 +40,7 @@
     name={{ debian.name }}
     path={{ debian.path }}
     state=present
+    force=yes
 
 - name: Start debian jessie container
   docker_container:
@@ -85,6 +86,7 @@
     name={{ ubuntu.name }}
     path={{ ubuntu.path }}
     state=present
+    force=yes
 
 - name: Start ubuntu 16.04 container
   docker_container:

@@ -16,6 +16,7 @@ structs
 workflow-step-api
 workflow-scm-step
 credentials
+display-url-api
 mailer
 scm-api
 git-client

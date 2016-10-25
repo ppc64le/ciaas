@@ -29,6 +29,5 @@
   copy: >
     src=./roles/jenkins/files/id_rsa.pub
     dest=./roles/slave/files/authorized_keys
-    owner={{ ansible_user }}
     mode=0555
   when: not authorized_keys.stat.exists

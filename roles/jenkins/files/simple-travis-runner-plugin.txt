@@ -40,6 +40,7 @@ git-client
 ssh-credentials
 pipeline-input-step
 workflow-basic-steps
+display-url-api
 mailer
 workflow-durable-task-step
 durable-task
