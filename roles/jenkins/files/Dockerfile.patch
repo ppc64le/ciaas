@@ -89,9 +89,10 @@
 > 
 50d77
 < # from a derived Dockerfile, can use `RUN plugin.sh active.txt` to setup /usr/share/jenkins/ref/plugins from a support bundle
-51a79,85
+51a79,86
 > COPY jenkins-plugins.txt /usr/share/jenkins/ref/jenkins-plugins.txt
 > RUN /usr/local/bin/plugins.sh /usr/share/jenkins/ref/jenkins-plugins.txt
+> COPY gearman-plugin.hpi /usr/share/jenkins/ref/plugins/gearman-plugin.jpi
 > 
 > COPY configure_*.groovy /usr/share/jenkins/ref/init.groovy.d/
 > 
