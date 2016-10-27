@@ -74,7 +74,6 @@ DockerCloud docker = new DockerCloud(
 
 
 Jenkins.instance.clouds.add(docker)
-Jenkins.instance.setNumExecutors(0)
 Jenkins.instance.save()
 
 // vi: set ft=groovy :
