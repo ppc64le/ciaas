@@ -81,6 +81,15 @@
     mode=0664
   register: gearman
 
+- name: Copy simple-travis-runner.hpi
+  copy: >
+    src=simple-travis-runner.hpi
+    dest=/var/powerci/jenkins/simple-travis-runner.hpi
+    owner={{ ansible_user }}
+    group={{ ansible_user }}
+    mode=0664
+  register: simpletravisrunner
+
 - name: Generate jenkins-plugins.txt
   shell: cat /var/powerci/jenkins/*-plugin.txt | sort -u | grep -v \# > /var/powerci/jenkins/jenkins-plugins.txt && chown 1000:1000 /var/powerci/jenkins/jenkins-plugins.txt
   when: plugins|changed or removed_plugins|changed
@@ -195,7 +204,7 @@
   sudo: yes
   shell: ls -la /var/lib/docker/volumes/jenkins_jenkins_home/_data/ | tail -n +4 | awk '{print "- "$9" "}' | grep -v jobs
   register: files
-  when: slave|changed or gearmand|changed or ldap|changed or plugins|changed or removed_plugins|changed or credentials|changed or gearman|changed
+  when: slave|changed or gearmand|changed or ldap|changed or plugins|changed or removed_plugins|changed or credentials|changed or gearman|changed or simpletravisrunner|changed
   ignore_errors: true
 
 - name: Remove files
@@ -204,7 +213,7 @@
     path=/var/lib/docker/volumes/jenkins_jenkins_home/_data/{{ item }}
     state=absent
   with_items: "{{ files.stdout|from_yaml }}"
-  when: files|success and (slave|changed or gearmand|changed or ldap|changed or plugins|changed or removed_plugins|changed or credentials|changed or gearman|changed)
+  when: files|success and (slave|changed or gearmand|changed or ldap|changed or plugins|changed or removed_plugins|changed or credentials|changed or gearman|changed or simpletravisrunner|changed)
 
 - name: Build jenkins image
   docker_service:
