@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     'project',
     'project.projectdata.scm_git',
     'project.projectdata.builder_shell',
+    'project.projectdata.project_travis',
     'partner',
     'multipleselection',
     'django.contrib.admin',
@@ -229,10 +230,14 @@ dataSettings.DATA_LIST = {
         'project.projectdata.scm_git.base.ScmGitData',
         'project.projectdata.builder_shell.base.BuilderShellData',
     ],
+    'travis_project': [
+        'project.projectdata.project_travis.base.ProjectTravisData',
+    ],
 }
 
 dataSettings.PROJECT_TYPES = {
     'shell_script': 'Write a shell script to build my project.',
+    'travis_project': 'Your project has a .travis.yml file.',
 }
 
 # vim:set ft=python:

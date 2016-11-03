@@ -100,8 +100,8 @@
 
 - name: Remove stopped containers
   shell: docker rm `docker ps -q -f status=exited`
-  ignore_errors: True
+  failed_when: False
 
 - name: Remove dangling images
   shell: docker rmi `docker images -q -f dangling=true`
-  ignore_errors: True
+  failed_when: False
