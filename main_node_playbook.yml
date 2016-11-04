@@ -62,3 +62,11 @@
     - {role: gearmand,
        using_client_host: "{{ groups.client[0] }}",
        using_client_port: "{{ hostvars[groups.client[0]].client_port }}"}
+
+- name: File Server playbook
+  gather_facts: yes
+  hosts: file_server
+  vars:
+    project_path: "{{ playbook_dir }}"
+  roles:
+    - file_server

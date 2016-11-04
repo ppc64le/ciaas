@@ -18,6 +18,9 @@
 [ldap]
 192.168.122.231 ansible_user=ubuntu ldap_port=389 ldaps_port=636 ldap_root_dn="dc=example,dc=com" ca_domain="example.com"
 
+[file_server]
+192.168.122.231 ansible_user=ubuntu fileserver_port=2222
+
 [jenkins]
 192.168.122.203 ansible_connection=local ansible_user=ubuntu jenkins_port=8080
 
