@@ -30,7 +30,8 @@ def credStore = Jenkins.instance.getExtensionList(
     'com.cloudbees.plugins.credentials.SystemCredentialsProvider')[0]
     .getStore()
 
-username = "jenkins"
+credentialName = "jenkins"
+username = "root"
 password = ""
 description = "slave ssh key"
 
@@ -40,7 +41,7 @@ BasicSSHUserPrivateKey.FileOnMasterPrivateKeySource keySource =
 
 BasicSSHUserPrivateKey newCredential = new BasicSSHUserPrivateKey(
     CredentialsScope.GLOBAL,
-    username,
+    credentialName,
     username,
     keySource,
     password,

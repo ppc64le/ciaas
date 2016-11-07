@@ -21,21 +21,26 @@ RUN apt-get -q update &&\
     DEBIAN_FRONTEND="noninteractive" apt-get -q install -y -o Dpkg::Options::="--force-confnew"  --no-install-recommends \
     build-essential \
     git-core \
+    python \
+    python-dev \
     openssh-server \
     openjdk-8-jdk &&\
     apt-get -q autoremove &&\
     apt-get -q clean -y && rm -rf /var/lib/apt/lists/* && rm -f /var/cache/apt/*.bin
 
+# Install pip
+ADD https://bootstrap.pypa.io/get-pip.py /tmp/get-pip.py
+RUN python /tmp/get-pip.py \
+    && pip install --upgrade pip
 # Jenkins user
-RUN useradd -m -s /bin/bash -u 1000 jenkins \
-    && echo "jenkins:jenkins" | chpasswd
+    # && useradd -m -s /bin/bash -u 1000 jenkins \
+    # && echo "jenkins:jenkins" | chpasswd
 
 # Add public key for Jenkins login
-RUN mkdir /home/jenkins/.ssh
-ADD authorized_keys /home/jenkins/.ssh/authorized_keys
-RUN chown -R jenkins:jenkins /home/jenkins \
-    && chmod 600 /home/jenkins/.ssh/* \
-    && chmod 700 /home/jenkins/.ssh
+RUN mkdir /root/.ssh
+ADD authorized_keys /root/.ssh/authorized_keys
+RUN chmod 600 /root/.ssh/* \
+    && chmod 700 /root/.ssh
 
 # Add jenkins to sudoers
 RUN echo "jenkins  ALL=(ALL)  ALL" >> /etc/sudoers
