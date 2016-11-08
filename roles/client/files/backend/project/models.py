@@ -165,7 +165,7 @@ class Project(models.Model):
         forms = [ProjectForm()]
         forms.extend(
             [data.getBlankForm()
-             for data in dataManager.dataList[projType].values()]
+             for data in dataManager.dataList[projType].packages.values()]
         )
         return forms
 

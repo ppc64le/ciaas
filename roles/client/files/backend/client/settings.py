@@ -64,9 +64,11 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # 'debug_toolbar',
 ]
 
 MIDDLEWARE_CLASSES = [
+    # 'debug_toolbar.middleware.DebugToolbarMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -76,6 +78,16 @@ MIDDLEWARE_CLASSES = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+DEBUG_TOOLBAR_CONFIG = {
+    # 'SHOW_TOOLBAR_CALLBACK': lambda x: True,
+}
+
+DEBUG_TOOLBAR_PANELS = {
+    'debug_toolbar.panels.headers.HeadersPanel',
+    'debug_toolbar.panels.request.RequestPanel',
+    'debug_toolbar.panels.templates.TemplatesPanel',
+}
 
 # LOGGING = {
 #     'version': 1,
@@ -226,18 +238,33 @@ STATICFILES_DIRS = [
 LOGIN_URL = '/account/signin'
 
 dataSettings.DATA_LIST = {
-    'shell_script': [
-        'project.projectdata.scm_git.base.ScmGitData',
-        'project.projectdata.builder_shell.base.BuilderShellData',
-    ],
-    'travis_project': [
-        'project.projectdata.project_travis.base.ProjectTravisData',
-    ],
-}
-
-dataSettings.PROJECT_TYPES = {
-    'shell_script': 'Write a shell script to build my project.',
-    'travis_project': 'Your project has a .travis.yml file.',
+    'shell_script': {
+        'packages': [
+            'project.projectdata.scm_git.base.ScmGitData',
+            'project.projectdata.builder_shell.base.BuilderShellData',
+        ],
+        'message': 'Write a shell script to build my project.',
+        'description': 'Fill the shell script field with the steps to build your project',
+    },
+    'travis_project': {
+        'packages': [
+            'project.projectdata.project_travis.base.ProjectTravisData',
+        ],
+        'message': 'Your project has a .travis.yml file.',
+        'description':
+            '''Convert simple Travis YAML into Jenkins pipeline projects.<br/>
+Currently travis sections supported:
+<ul>
+    <li>before_install
+    <li>install</li>
+    <li>before_script</li>
+    <li>script</li>
+    <li>after_failure</li>
+    <li>after_success</li>
+    <li>after_script</li>
+    <li>env</li>
+</ul>''',
+    }
 }
 
 # vim:set ft=python:

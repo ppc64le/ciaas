@@ -67,19 +67,17 @@ class DataManager(object):
         DataManager._instance = self
 
         # Object parameters
-
-        # Bring PROJECT_TYPES inside the DataManager.
         self.projectTypes = []
-        for proj_type in PROJECT_TYPES.keys():
-            self.projectTypes.append((proj_type, PROJECT_TYPES[proj_type]))
-
-        # Import project data.
         self.dataList = {}
+
         for proj_type in DATA_LIST.keys():
-            k_array = [data[data.rfind('.')+1:-4].lower()
-                       for data in DATA_LIST[proj_type]]
-            v_array = [_importClass(data) for data in DATA_LIST[proj_type]]
-            self.dataList[proj_type] = {k: v for k, v in zip(k_array, v_array)}
+            self.projectTypes.append((proj_type,
+                                      DATA_LIST[proj_type]['message']))
+            self.dataList[proj_type] = ProjectType(
+                DATA_LIST[proj_type]['packages'],
+                DATA_LIST[proj_type]['message'],
+                DATA_LIST[proj_type]['description']
+            )
 
     @staticmethod
     def get():
@@ -88,3 +86,16 @@ class DataManager(object):
             return DataManager()
         else:
             return DataManager._instance
+
+
+class ProjectType(object):
+
+    def __init__(self, packages, message, description):
+        self.message = message
+        self.description = description
+
+        self.packages = {}
+        for package in packages:
+            k = package[package.rfind('.')+1:-4].lower()  # Class name
+            v = _importClass(package)  # Class object
+            self.packages[k] = v

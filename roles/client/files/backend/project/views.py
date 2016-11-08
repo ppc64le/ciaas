@@ -111,24 +111,31 @@ def create(request, projType):
         project.save()
 
         thisDataList = [projectForm]
-        for data in dataManager.dataList[projType].values():
+        for data in dataManager.dataList[projType].packages.values():
             d = data(project, request.POST)
             thisDataList.append(d)
 
         _updateJenkinsJob(project.getData())
 
+        context = {
+            'project': project,
+            'forms': [data if isinstance(data, forms.ModelForm)
+                      else data.getForm()
+                      for data in thisDataList],
+            'description': dataManager.dataList[projType].description
+        }
+
         return render(request,
                       'project/create_successful.html',
-                      {'project': project,
-                       'forms': [data if isinstance(data, forms.ModelForm)
-                                 else data.getForm()
-                                 for data in thisDataList]})
+                      context)
 
 
 def _createBlankForm(request, projType):
     """Render a blank project form accordingly to project type."""
+    dataManager = DataManager.get()
     context = {
         'forms': models.Project.getForms(projType),
+        'description': dataManager.dataList[projType].description
     }
     return render(request, 'project/create.html', context)
 
