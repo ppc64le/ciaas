@@ -23,6 +23,7 @@ import ldap.modlist as modlist
 import ldap
 
 from client import settings, secret
+import forms
 import utils
 
 
@@ -124,12 +125,14 @@ def signin(request):
     if request.user.is_authenticated():
         return render(request, 'account/signin_already_signedin.html', None)
     elif len(request.POST.keys()) > 0:
-        username = request.POST.get('user')
-        password = request.POST.get('password')
+        signin_form = forms.SignInForm(request.POST)
+        if not signin_form.is_valid():
+            return render(request,
+                          'account/signin.html',
+                          {'signin_form': signin_form})
 
         try:
-            user = auth.authenticate(username=username,
-                                     password=password)
+            user = auth.authenticate(**signin_form.cleaned_data)
         except:
             user = None
 
@@ -138,7 +141,8 @@ def signin(request):
             user.save()
             auth.login(request, user)
         else:
-            context = {'error': 'Incorrect username or password'}
+            context = {'error': 'Incorrect username or password',
+                       'signin_form': signin_form}
             return render(request, 'account/signin.html', context)
 
         next = request.GET.get('next', None)
@@ -147,7 +151,9 @@ def signin(request):
         else:
             return redirect(urlresolvers.reverse('account:profile'))
     else:
-        return render(request, 'account/signin.html')
+        return render(request,
+                      'account/signin.html',
+                      {'signin_form': forms.SignInForm()})
 
 
 @login_required

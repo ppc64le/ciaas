@@ -27,14 +27,7 @@
         <div class="col s12 m8 offset-m2 l6 offset-l3 z-depth-1" >
             <form method="POST" style="padding: 1.2em">
                 {% csrf_token %}
-                <div>
-                    <label for="user">User or E-mail</label>
-                    <input id="user" name="user" type="text" required/>
-                </div>
-                <div>
-                    <label for="password">Password</label>
-                    <input id="password" name="password" type="password" required/>
-                </div>
+                {{ signin_form.as_p }}
                 <div>
                     <input type="submit" value="SUBMIT" class="btn-large fill"/>
                 </div>
