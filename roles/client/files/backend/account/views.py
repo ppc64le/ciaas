@@ -19,10 +19,7 @@ from django.contrib import auth
 from django.core import urlresolvers
 from django.shortcuts import render, redirect
 from django.views.decorators.csrf import ensure_csrf_cookie
-import ldap.modlist as modlist
-import ldap
 
-from client import settings, secret
 import forms
 import utils
 
@@ -67,37 +64,31 @@ def signup(request):
     if request.user.is_authenticated():
         return render(request, 'account/signup_already_signedin.html', None)
     elif len(keys) == 0:
-        return render(request, 'account/signup.html', None)
+        return render(request,
+                      'account/signup.html',
+                      {'signup_form': forms.SignUpForm()})
     else:
-        username = request.POST.get('username')
-        first_name = request.POST.get('first_name')
-        last_name = request.POST.get('last_name')
-        email = request.POST.get('email')
-        password = request.POST.get('password')
-        # confirm_password = request.POST.get('confirm_password')
+        signup_form = forms.SignUpForm(request.POST)
+        if not signup_form.is_valid():
+            return render(request,
+                          'account/signup.html',
+                          {'signup_form': signup_form})
 
-        # TODO: Check password and confirmation.
-
-        ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
-        ldap.set_option(ldap.OPT_X_TLS_CACERTFILE, settings.LDAP_CACERTFILE)
-        l = ldap.initialize(secret.LDAP_URI)
-        l.protocol_version = ldap.VERSION3
-        l.start_tls_s()
-        l.simple_bind_s(secret.LDAP_BIND_DN, secret.LDAP_BIND_PASSWORD)
-
-        dn = settings.LDAP_USER_DN_TEMPLATE % str(username)
         user = {
-            'cn': str(first_name),
-            'sn': str(last_name),
-            'mail': str(email),
-            'userPassword': str(utils.hashPassword(password)),
+            'uid': str(signup_form.cleaned_data.get('username')),
+            'ou': 'Users',
+            'cn': str(signup_form.cleaned_data.get('first_name')),
+            'sn': str(signup_form.cleaned_data.get('last_name')),
+            'mail': str(signup_form.cleaned_data.get('email')),
+            'userPassword': str(utils.hashPassword(
+                signup_form.cleaned_data.get('password'))
+            ),
             'objectClass': ['person', 'organizationalPerson', 'inetOrgPerson']
         }
 
-        ldif = modlist.addModlist(user)
-        l.add_s(dn, ldif)
-        l.unbind_s()
-        context = {'username': username}
+        utils.createUser(user)
+
+        context = {'username': signup_form.cleaned_data.get('username')}
         return render(request, 'account/signup_successful.html', context)
 
 

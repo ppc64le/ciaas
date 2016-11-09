@@ -22,7 +22,7 @@ import pytz
 import threading
 import time
 
-from account.utils import randomPassword, hashPassword
+from account import utils as acc_utils
 from client import settings, secret
 import models
 
@@ -48,20 +48,16 @@ def getJenkinsUser(partner, usingPassword=None, isAdmin=False):
     jPassword = None
 
     if isAdmin:
-        dn = settings.LDAP_USER_DN_TEMPLATE \
-             % str(partner.shortName + '_jenkins_admin')
+        jUser = str(partner.shortName + '_jenkins_admin')
     else:
-        dn = settings.LDAP_USER_DN_TEMPLATE \
-             % str(partner.shortName + '_jenkins')
+        jUser = str(partner.shortName + '_jenkins')
 
-    ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
-    ldap.set_option(ldap.OPT_X_TLS_CACERTFILE, settings.LDAP_CACERTFILE)
-    l = ldap.initialize(secret.LDAP_URI)
-    l.protocol_version = ldap.VERSION3
-    l.start_tls_s()
-    l.simple_bind_s(secret.LDAP_BIND_DN, secret.LDAP_BIND_PASSWORD)
-    result = l.search_s(dn, ldap.SCOPE_SUBTREE)
-    l.unbind_s()
+    try:
+        result = acc_utils.getUserInfo(jUser)
+    except ldap.LDAPError, e:
+        print('Cannot get %(partner_name)s jenkins user'
+              % {'partner_name': partner.shortName})
+        raise e
 
     jUser = result[0][1]['uid'][0]
     oldHash = result[0][1]['userPassword'][0]
@@ -69,9 +65,10 @@ def getJenkinsUser(partner, usingPassword=None, isAdmin=False):
     if usingPassword is not None:
         jPassword = usingPassword
     else:
-        jPassword = randomPassword()
-    newHash = hashPassword(jPassword)
-    _changePassword(dn, oldHash, newHash)
+        jPassword = acc_utils.randomPassword()
+    newHash = acc_utils.hashPassword(jPassword)
+
+    _changePassword(str(result[0][0]), oldHash, newHash)
 
     return jUser, jPassword, newHash
 

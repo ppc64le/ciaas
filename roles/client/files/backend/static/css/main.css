@@ -36,3 +36,6 @@ main {
     right: 1.5em;
     bottom: 1.5em;
 }
+
+.errorlist {
+    color: red;

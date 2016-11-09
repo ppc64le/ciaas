@@ -76,6 +76,8 @@ def createUser(user):
             * cn: first name.
             * sn: last name.
             * mail: e-mail.
+            * userPassword: hashed password.
+            * objectClass: array of LDAP classes this object is related.
     """
     _assertUserDict(user)
 
@@ -131,3 +133,18 @@ def isUserStaff(username):
     result = l.search_s(dn, ldap.SCOPE_SUBTREE)
     userdn = (settings.LDAP_USER_DN_TEMPLATE % username).lower()
     return userdn in result[0][1]['member']
+
+
+def getUserInfo(username):
+    dn = settings.LDAP_USER_DN_TEMPLATE % str(username)
+
+    ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
+    ldap.set_option(ldap.OPT_X_TLS_CACERTFILE, settings.LDAP_CACERTFILE)
+    l = ldap.initialize(secret.LDAP_URI)
+    l.protocol_version = ldap.VERSION3
+    l.start_tls_s()
+    l.simple_bind_s(secret.LDAP_BIND_DN, secret.LDAP_BIND_PASSWORD)
+    result = l.search_s(dn, ldap.SCOPE_SUBTREE)
+    l.unbind_s()
+
+    return result
