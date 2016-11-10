@@ -32,14 +32,18 @@ class BuilderShellData(AbstractProjectData):
             BuilderShellData: the object holding the form data.
         """
         self.form = BuilderShellForm(formData)
-        self.model = self.form.save(commit=False)
-        self.model.parent = parent
-        self.model.type = 'buildershellmodel'
-        self.model.save()
+        self.model = None
+        self.parent = parent
 
     def getModel(self):
         """Get the database model representation of builder shell data."""
-        return self.model
+        if self.model is not None:
+            return self.model
+        else:
+            self.model = self.form.save(commit=False)
+            self.model.parent = self.parent
+            self.model.type = 'buildershellmodel'
+            return self.model
 
     def getForm(self):
         """Get the form representation of builder shell data."""

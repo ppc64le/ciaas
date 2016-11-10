@@ -33,14 +33,18 @@ class ProjectTravisData(AbstractProjectData):
             ProjectTravisData: the object holding the form data.
         """
         self.form = ProjectTravisForm(formData)
-        self.model = self.form.save(commit=False)
-        self.model.parent = parent
-        self.model.type = 'projecttravismodel'
-        self.model.save()
+        self.model = None
+        self.parent = parent
 
     def getModel(self):
         """Get the database model representation of project travis data."""
-        return self.model
+        if self.model is not None:
+            return self.model
+        else:
+            self.model = self.form.save(commit=False)
+            self.model.parent = self.parent
+            self.model.type = 'projecttravismodel'
+            return self.model
 
     def getForm(self):
         """Get the form representation of project travis data."""

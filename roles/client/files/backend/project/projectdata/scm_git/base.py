@@ -32,14 +32,18 @@ class ScmGitData(AbstractProjectData):
             ScmGitData: the object holding this form data.
         """
         self.form = ScmGitForm(formData)
-        self.model = self.form.save(commit=False)
-        self.model.parent = parent
-        self.model.type = 'scmgitmodel'
-        self.model.save()
+        self.model = None
+        self.parent = parent
 
     def getModel(self):
         """Get the database model representation of scm git data."""
-        return self.model
+        if self.model is not None:
+            return self.model
+        else:
+            self.model = self.form.save(commit=False)
+            self.model.parent = self.parent
+            self.model.type = 'scmgitmodel'
+            return self.model
 
     def getForm(self):
         """Get the form representation of scm git data."""

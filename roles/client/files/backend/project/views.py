@@ -14,7 +14,6 @@
 
 """Project views."""
 
-from django import forms
 from django.contrib.auth.decorators import login_required
 from django.core import urlresolvers
 from django.shortcuts import render, redirect
@@ -25,6 +24,7 @@ import gear
 import simplejson
 import uuid
 import yaml
+import pprint
 
 from client import settings
 from projectdata.settings import DataManager
@@ -97,47 +97,60 @@ def create(request, projType):
             a success message if request has valid project data.
     """
     keys = request.POST.keys()
+    dataManager = DataManager.get()
+
     if len(keys) == 0:
-        return _createBlankForm(request, projType)
+        # Return a blank form.
+        context = {
+            'forms': models.Project.getForms(projType),
+            'description': dataManager.dataList[projType].description
+        }
+        return render(request, 'project/create.html', context)
     else:
-        dataManager = DataManager.get()
+        forms_are_valid = True
         if projType not in dataManager.dataList.keys():
             # TODO: Properly notify the error with the right status code.
             return HttpResponse("ERROR: Invalid project type: %s" % projType)
 
+        project = None
         projectForm = models.ProjectForm(request.POST)
-        project = projectForm.save(commit=False)
-        project.owner = request.user
-        project.save()
+        try:
+            project = projectForm.save(commit=False)
+            project.owner = request.user
+        except ValueError:
+            forms_are_valid = False
 
-        thisDataList = [projectForm]
+        thisDataList = []
         for data in dataManager.dataList[projType].packages.values():
             d = data(project, request.POST)
+            forms_are_valid = forms_are_valid and d.getForm().is_valid()
             thisDataList.append(d)
+
+        if forms_are_valid:
+            project.save()
+            for data in thisDataList:
+                data.getModel().save()
+        else:
+            # Return form with errors.
+            pprint.pprint(projectForm)
+            pprint.pprint(thisDataList)
+            pprint.pprint([data.getForm() for data in thisDataList])
+            context = {
+                'forms': [projectForm] + [data.getForm()
+                                          for data in thisDataList],
+                'description': dataManager.dataList[projType].description
+            }
+            pprint.pprint(context)
+            return render(request,
+                          'project/create.html',
+                          context)
 
         _updateJenkinsJob(project.getData())
 
-        context = {
-            'project': project,
-            'forms': [data if isinstance(data, forms.ModelForm)
-                      else data.getForm()
-                      for data in thisDataList],
-            'description': dataManager.dataList[projType].description
-        }
-
+        # Return success page.
         return render(request,
                       'project/create_successful.html',
-                      context)
-
-
-def _createBlankForm(request, projType):
-    """Render a blank project form accordingly to project type."""
-    dataManager = DataManager.get()
-    context = {
-        'forms': models.Project.getForms(projType),
-        'description': dataManager.dataList[projType].description
-    }
-    return render(request, 'project/create.html', context)
+                      {'project': project})
 
 
 @login_required

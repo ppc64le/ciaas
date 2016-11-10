@@ -90,7 +90,7 @@ class Project(models.Model):
     )
 
     owner = models.ForeignKey(User, on_delete=models.CASCADE)
-    name = models.CharField(max_length=100,
+    name = models.SlugField(max_length=100,
                             unique=True)
     nodes = MultipleSelectionField(max_length=150, choices=NODE_CHOICES)
     builds = None
