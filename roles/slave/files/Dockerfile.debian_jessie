@@ -24,9 +24,13 @@ RUN apt-get -q update &&\
     python \
     python-dev \
     openssh-server \
+    sudo \
     openjdk-8-jdk &&\
     apt-get -q autoremove &&\
-    apt-get -q clean -y && rm -rf /var/lib/apt/lists/* && rm -f /var/cache/apt/*.bin
+    apt-get -q clean -y
+
+# Link sh to bash
+RUN ln -sf bash /bin/sh
 
 # Install pip
 ADD https://bootstrap.pypa.io/get-pip.py /tmp/get-pip.py

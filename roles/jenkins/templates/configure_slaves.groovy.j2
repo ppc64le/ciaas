@@ -40,15 +40,15 @@ slave = (Node) new DumbSlave("ppc64le_debian_jessie_" + seqid++,
                              "/home/jenkins",
                              "2",
                              Node.Mode.NORMAL,
-                             "ppc64le_debian_jessie any",
+                             "{{ slave_labels.jessie|join(" ") }}",
                              launcher,
                              new RetentionStrategy.Always(),
                              new ArrayList())
 Jenkins.instance.addNode(slave)
 {% endfor %}
 {% endif %}
-{% if hostvars[slave].ubuntu_ports is defined %}
-{% for ubuntu_port in hostvars[slave].ubuntu_ports %}
+{% if hostvars[slave].ubuntu_xenial_ports is defined %}
+{% for ubuntu_port in hostvars[slave].ubuntu_xenial_ports %}
 launcher = (ComputerLauncher) new SSHLauncher("{{ slave }}",
                                               {{ ubuntu_port }},
                                               "jenkins",
@@ -59,7 +59,26 @@ slave = (Node) new DumbSlave("ppc64le_ubuntu_16_04_" + seqid++,
                              "/home/jenkins",
                              "2",
                              Node.Mode.NORMAL,
-                             "ppc64le_ubuntu_16_04 any",
+                             "{{ slave_labels.xenial|join(" ") }}",
+                             launcher,
+                             new RetentionStrategy.Always(),
+                             new ArrayList())
+Jenkins.instance.addNode(slave)
+{% endfor %}
+{% endif %}
+{% if hostvars[slave].ubuntu_trusty_ports is defined %}
+{% for ubuntu_port in hostvars[slave].ubuntu_trusty_ports %}
+launcher = (ComputerLauncher) new SSHLauncher("{{ slave }}",
+                                              {{ ubuntu_port }},
+                                              "jenkins",
+                                              "", "", "", "",
+                                              -1, -1, -1)
+slave = (Node) new DumbSlave("ppc64le_ubuntu_14_04_" + seqid++,
+                             "Just a test dumb slave",
+                             "/home/jenkins",
+                             "2",
+                             Node.Mode.NORMAL,
+                             "{{ slave_labels.trusty|join(" ") }}",
                              launcher,
                              new RetentionStrategy.Always(),
                              new ArrayList())

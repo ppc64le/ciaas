@@ -18,97 +18,147 @@
     path=/var/powerci/slave
     state=directory
 
-- name: Create debian_jessie directory
+- name: debian_jessie - Create directory
   file: >
     path=/var/powerci/slave/debian_jessie
     state=directory
 
-- name: Copy Dockerfile
+- name: debian_jessie - copy dockerfile
   copy: >
     src=Dockerfile.debian_jessie
     dest=/var/powerci/slave/debian_jessie/Dockerfile
 
-- name: Copy authorized_keys
+- name: debian_jessie - copy authorized_keys
   copy: >
     src=authorized_keys
     dest=/var/powerci/slave/debian_jessie/authorized_keys
     owner={{ ansible_user }}
     mode=0644
 
-- name: Build debian jessie image
+- name: debian_jessie - build image
   docker_image: >
-    name={{ debian.name }}
+    name={{ debian.img_name }}
     path={{ debian.path }}
     state=present
     force=yes
 
-- name: Start debian jessie container
+- name: debian_jessie - start container
   docker_container:
-    name: "debian{{ item }}"
-    image: "{{ debian.name }}"
+    name: "{{ debian.cont_prefix }}{{ item }}"
+    image: "{{ debian.img_name }}"
     state: started
     ports:
       - "{{ debian.ports[ item|int ] }}:22"
   with_sequence: start=0 count={{ debian.ports|length }}
 
-- name: Counting debian containers
-  shell: docker ps -f name=debian* | tail -n +2 | wc -l
+- name: debian_jessie - counting containers
+  shell: "docker ps -f name={{ debian.cont_prefix }}* | tail -n +2 | wc -l"
   register: up_debians
 
-- name: Remove exceding containers
+- name: debian_jessie - remove exceding containers
   docker_container:
-    name: "debian{{ item }}"
+    name: "{{ debian.cont_prefix }}{{ item }}"
     state: absent
   with_sequence: >
     start={{ debian.ports|length }}
     count={{ (up_debians.stdout|int)-(debian.ports|length) }}
   when: up_debians.stdout|int > debian.ports|length
 
-- name: Create ubuntu_16_04 directory
+### UBUNTU TRUSTY ###
+
+- name: ubuntu_14_04 - create directory
+  file: >
+    path=/var/powerci/slave/ubuntu_14_04
+    state=directory
+
+- name: ubuntu_14_04 - copy dockerfile
+  copy: >
+    src=Dockerfile.ubuntu_14_04
+    dest=/var/powerci/slave/ubuntu_14_04/Dockerfile
+
+- name: ubuntu_14_04 - copy authorized_keys
+  copy: >
+    src=authorized_keys
+    dest=/var/powerci/slave/ubuntu_14_04/authorized_keys
+    owner={{ ansible_user }}
+    mode=0644
+
+- name: ubuntu_14_04 - build image
+  docker_image: >
+    name={{ ubuntu.trusty.img_name }}
+    path={{ ubuntu.trusty.path }}
+    state=present
+    force=yes
+
+- name: ubuntu_14_04 - start container
+  docker_container:
+    name: "{{ ubuntu.trusty.cont_prefix }}{{ item }}"
+    image: "{{ ubuntu.trusty.img_name }}"
+    state: started
+    ports:
+      - "{{ ubuntu.trusty.ports[ item|int ] }}:22"
+  with_sequence: start=0 count={{ ubuntu.trusty.ports|length }}
+
+- name: ubuntu_14_04 - counting containers
+  shell: "docker ps -f name={{ ubuntu.trusty.cont_prefix }}* | tail -n +2 | wc -l"
+  register: up_trusty
+
+- name: ubuntu_14_04 - remove exceding containers
+  docker_container:
+    name: "{{ ubuntu.trusty.cont_prefix }}{{ item }}"
+    state: absent
+  with_sequence: >
+    start={{ ubuntu.trusty.ports|length }}
+    count={{ (up_trusty.stdout|int)-(ubuntu.trusty.ports|length) }}
+  when: up_trusty.stdout|int > ubuntu.trusty.ports|length
+
+### UBUNTU XENIAL ###
+
+- name: ubuntu_16_04 - create directory
   file: >
     path=/var/powerci/slave/ubuntu_16_04
     state=directory
 
-- name: Copy Dockerfile
+- name: ubuntu_16_04 - copy dockerfile
   copy: >
     src=Dockerfile.ubuntu_16_04
     dest=/var/powerci/slave/ubuntu_16_04/Dockerfile
 
-- name: Copy authorized_keys
+- name: ubuntu_16_04 - copy authorized_keys
   copy: >
     src=authorized_keys
     dest=/var/powerci/slave/ubuntu_16_04/authorized_keys
     owner={{ ansible_user }}
     mode=0644
 
-- name: Build ubuntu 16.04 image
+- name: ubuntu_16_04 - build image
   docker_image: >
-    name={{ ubuntu.name }}
-    path={{ ubuntu.path }}
+    name={{ ubuntu.xenial.img_name }}
+    path={{ ubuntu.xenial.path }}
     state=present
     force=yes
 
-- name: Start ubuntu 16.04 container
+- name: ubuntu_16_04 - start container
   docker_container:
-    name: "ubuntu{{ item }}"
-    image: "{{ ubuntu.name }}"
+    name: "{{ ubuntu.xenial.cont_prefix }}{{ item }}"
+    image: "{{ ubuntu.xenial.img_name }}"
     state: started
     ports:
-      - "{{ ubuntu.ports[ item|int ] }}:22"
-  with_sequence: start=0 count={{ ubuntu.ports|length }}
+      - "{{ ubuntu.xenial.ports[ item|int ] }}:22"
+  with_sequence: start=0 count={{ ubuntu.xenial.ports|length }}
 
-- name: Counting ubuntu containers
-  shell: docker ps -f name=ubuntu* | tail -n +2 | wc -l
-  register: up_ubuntus
+- name: ubuntu_16_04 - counting containers
+  shell: "docker ps -f name={{ ubuntu.xenial.cont_prefix }}* | tail -n +2 | wc -l"
+  register: up_xenial
 
-- name: Remove exceding containers
+- name: ubuntu_16_04 - remove exceding containers
   docker_container:
-    name: "ubuntu{{ item }}"
+    name: "{{ ubuntu.xenial.cont_prefix }}{{ item }}"
     state: absent
   with_sequence: >
-    start={{ ubuntu.ports|length }}
-    count={{ (up_ubuntus.stdout|int)-(ubuntu.ports|length) }}
-  when: up_ubuntus.stdout|int > ubuntu.ports|length
+    start={{ ubuntu.xenial.ports|length }}
+    count={{ (up_xenial.stdout|int)-(ubuntu.xenial.ports|length) }}
+  when: up_xenial.stdout|int > ubuntu.xenial.ports|length
 
 - name: Remove stopped containers
   shell: docker rm `docker ps -q -f status=exited`

@@ -16,3 +16,27 @@
 image:
   path: "/var/powerci/jenkins"
   name: "ppc64le/jenkins"
+
+slave_labels:
+  trusty:
+    - any
+    - ppc64le_ubuntu_14_04
+    - trusty
+    - trusty_tahr
+    - ubuntu
+    - ubuntu_trusty
+    - ubuntu_14_04
+  xenial:
+    - any
+    - ppc64le_ubuntu_16_04
+    - xenial
+    - xenial_xerus
+    - ubuntu
+    - ubuntu_xenial
+    - ubuntu_16_04
+  jessie:
+    - any
+    - ppc64le_debian_jessie
+    - jessie
+    - debian
+    - debian_jessie

@@ -12,20 +12,32 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
-FROM ppc64le/ubuntu:16.04
+FROM ppc64le/ubuntu:14.04
 MAINTAINER Davi Diorio Mendes <ddiorio@br.ibm.com>
 
-RUN echo "deb http://ftp.de.debian.org/debian jessie-backports main" >> /etc/apt/sources.list
+ENV DEBIAN_FRONTEND noninteractive
+
+# Add docker apt repo
+RUN echo "deb http://ftp.unicamp.br/pub/ppc64el/ubuntu/14_04/docker-ppc64el/ trusty main" \
+    > /etc/apt/sources.list.d/trusty-docker.list && \
+    printf "APT::Get::Assume-Yes \"true\";\nAPT::Get::force-yes \"true\";" \
+    > /etc/apt/apt.conf.d/90forceyes
+
+# Install requirements
 RUN apt-get -q update &&\
     DEBIAN_FRONTEND="noninteractive" apt-get -q upgrade -y -o Dpkg::Options::="--force-confnew" --no-install-recommends &&\
     DEBIAN_FRONTEND="noninteractive" apt-get -q install -y -o Dpkg::Options::="--force-confnew"  --no-install-recommends \
-    build-essential \
-    git-core \
-    python \
-    python-dev \
-    openssh-server \
-    sudo \
-    openjdk-8-jdk &&\
+        build-essential \
+        git-core \
+        python \
+        python-dev \
+        openssh-server \
+        sudo \
+        curl \
+        wget \
+        openssl \
+        rsync \
+        openjdk-7-jdk &&\
     apt-get -q autoremove &&\
     apt-get -q clean -y
 

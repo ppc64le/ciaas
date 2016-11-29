@@ -13,10 +13,10 @@
 # permissions and limitations under the License.
 
 ---
-debian_ports:
-  - 22000
+debian_ports: []
 
-ubuntu_ports:
-  - 22100
+ubuntu_trusty_ports: []
+
+ubuntu_xenial_ports: []
 
 ansible_user: 1000

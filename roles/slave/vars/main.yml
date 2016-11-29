@@ -15,10 +15,18 @@
 ---
 debian:
   path: "/var/powerci/slave/debian_jessie"
-  name: "ppc64le-slave-debian"
+  img_name: "ppc64le-slave-debian"
+  cont_prefix: "debian_jessie_"
   ports: "{{ debian_ports }}"
 
 ubuntu:
-  path: "/var/powerci/slave/ubuntu_16_04"
-  name: "ppc64le-slave-ubuntu"
-  ports: "{{ ubuntu_ports }}"
+  trusty:
+    path: "/var/powerci/slave/ubuntu_14_04"
+    img_name: "ppc64le-slave-ubuntu-trusty"
+    cont_prefix: "ubuntu_trusty_"
+    ports: "{{ ubuntu_trusty_ports }}"
+  xenial:
+    path: "/var/powerci/slave/ubuntu_16_04"
+    img_name: "ppc64le-slave-ubuntu-xenial"
+    cont_prefix: "ubuntu_xenial_"
+    ports: "{{ ubuntu_xenial_ports }}"
