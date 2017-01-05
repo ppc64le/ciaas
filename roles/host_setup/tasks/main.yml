@@ -85,10 +85,10 @@
   group: name=docker
 
  # Weird...
-- name: Add vagrant user to docker group
+- name: Add user to docker group
   sudo: yes
   user:
-    name: vagrant
+    name: "{{ ansible_user }}"
     groups: docker
     append: yes
 
