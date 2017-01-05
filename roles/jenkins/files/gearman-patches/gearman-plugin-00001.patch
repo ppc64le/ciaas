@@ -1,0 +1,730 @@
+diff -ruN -x '.git*' orig-gearman-plugin/src/main/java/hudson/plugins/gearman/CustomGearmanFunctionFactory.java gearman-plugin/src/main/java/hudson/plugins/gearman/CustomGearmanFunctionFactory.java
+--- orig-gearman-plugin/src/main/java/hudson/plugins/gearman/CustomGearmanFunctionFactory.java	2017-01-03 10:12:28.689290154 -0200
++++ gearman-plugin/src/main/java/hudson/plugins/gearman/CustomGearmanFunctionFactory.java	2017-01-03 14:07:17.482005622 -0200
+@@ -26,8 +26,8 @@
+ 
+ package hudson.plugins.gearman;
+ 
+-import hudson.model.AbstractProject;
+ import hudson.model.Computer;
++import hudson.model.Item;
+ import hudson.model.Project;
+ 
+ import java.lang.reflect.Constructor;
+@@ -39,7 +39,7 @@
+ 
+ public class CustomGearmanFunctionFactory extends DefaultGearmanFunctionFactory {
+ 
+-    private final AbstractProject<?,?> project;
++    private final Item project;
+     private final Computer computer;
+     private final String theClass;
+     private final String masterName;
+@@ -49,7 +49,7 @@
+             Constants.GEARMAN_WORKER_LOGGER_NAME);
+ 
+     public CustomGearmanFunctionFactory(String functionName, String className,
+-                                        AbstractProject<?,?> project, Computer computer,
++                                        Item project, Computer computer,
+                                         String masterName,
+                                         MyGearmanWorkerImpl worker) {
+         super(functionName, className);
+@@ -67,13 +67,13 @@
+                                       worker);
+     }
+ 
+-    private static GearmanFunction createFunctionInstance(String className, AbstractProject<?,?> project, Computer computer, String masterName, MyGearmanWorkerImpl worker) {
++    private static GearmanFunction createFunctionInstance(String className, Item project, Computer computer, String masterName, MyGearmanWorkerImpl worker) {
+ 
+         GearmanFunction f = null;
+         try {
+ 
+             Class<?> c = Class.forName(className);
+-            Constructor<?> con = c.getConstructor(new Class[]{AbstractProject.class, Computer.class, String.class, MyGearmanWorkerImpl.class});
++            Constructor<?> con = c.getConstructor(new Class<?>[]{Item.class, Computer.class, String.class, MyGearmanWorkerImpl.class});
+             Object o = con.newInstance(new Object[] {project, computer, masterName, worker});
+ 
+             if (o instanceof GearmanFunction) {
+diff -ruN -x '.git*' orig-gearman-plugin/src/main/java/hudson/plugins/gearman/ExecutorWorkerThread.java gearman-plugin/src/main/java/hudson/plugins/gearman/ExecutorWorkerThread.java
+--- orig-gearman-plugin/src/main/java/hudson/plugins/gearman/ExecutorWorkerThread.java	2017-01-03 10:12:28.689290154 -0200
++++ gearman-plugin/src/main/java/hudson/plugins/gearman/ExecutorWorkerThread.java	2017-01-03 14:07:17.482005622 -0200
+@@ -18,12 +18,14 @@
+ 
+ package hudson.plugins.gearman;
+ 
+-import hudson.model.AbstractProject;
+ import hudson.model.Computer;
++import hudson.model.Item;
+ import hudson.model.Label;
+ import hudson.model.labels.LabelAtom;
+ import hudson.model.Node;
+ import hudson.model.Node.Mode;
++import hudson.plugins.gearman.gearmanproject.GearmanProjectFactory;
++import hudson.plugins.gearman.gearmanproject.GearmanProject;
+ 
+ import java.util.HashMap;
+ import java.util.HashSet;
+@@ -117,8 +119,18 @@
+         if (!computer.isOffline()) {
+             Node node = computer.getNode();
+ 
+-            List<AbstractProject> allProjects = Jenkins.getActiveInstance().getAllItems(AbstractProject.class);
+-            for (AbstractProject<?, ?> project : allProjects) {
++            GearmanProjectFactory gpFactory = GearmanProjectFactory.getInstance();
++
++            List<Item> allItems = Jenkins.getActiveInstance().getAllItems(Item.class);
++            for (Item item : allItems) {
++
++                GearmanProject project = null;
++
++                try {
++                    project = gpFactory.create(item);
++                } catch (ClassCastException e) {
++                    continue;
++                }
+ 
+                 if (project.isDisabled()) { // ignore all disabled projects
+                     continue;
+@@ -133,7 +145,7 @@
+                         String jobFunctionName = "build:" + projectName;
+                         newFunctionMap.put(jobFunctionName, new CustomGearmanFunctionFactory(
+                             jobFunctionName, StartJobWorker.class.getName(),
+-                            project, computer, this.masterName, worker));
++                            project.getItem(), computer, this.masterName, worker));
+                     }
+                 } else { // register "build:$projectName:$label" if this
+                          // node matches a node from the project label
+@@ -152,7 +164,7 @@
+                         // register without label (i.e. "build:$projectName")
+                         newFunctionMap.put(jobFunctionName, new CustomGearmanFunctionFactory(
+                                 jobFunctionName, StartJobWorker.class.getName(),
+-                                project, computer, this.masterName, worker));
++                                project.getItem(), computer, this.masterName, worker));
+                         // iterate over the intersection of project and node labels
+                         for (LabelAtom labelAtom : nodeProjectLabelAtoms) {
+                             jobFunctionName = "build:" + projectName
+@@ -160,7 +172,7 @@
+                             // register with label (i.e. "build:$projectName:$label")
+                             newFunctionMap.put(jobFunctionName, new CustomGearmanFunctionFactory(
+                                     jobFunctionName, StartJobWorker.class.getName(),
+-                                    project, computer, this.masterName, worker));
++                                    project.getItem(), computer, this.masterName, worker));
+                         }
+                     }
+                 }
+diff -ruN -x '.git*' orig-gearman-plugin/src/main/java/hudson/plugins/gearman/GearmanPluginConfig.java gearman-plugin/src/main/java/hudson/plugins/gearman/GearmanPluginConfig.java
+--- orig-gearman-plugin/src/main/java/hudson/plugins/gearman/GearmanPluginConfig.java	2017-01-03 10:12:28.689290154 -0200
++++ gearman-plugin/src/main/java/hudson/plugins/gearman/GearmanPluginConfig.java	2017-01-03 14:07:17.482005622 -0200
+@@ -20,6 +20,9 @@
+ import hudson.Extension;
+ import hudson.model.Descriptor;
+ import hudson.util.FormValidation;
++import hudson.plugins.gearman.gearmanproject.GearmanProjectFactory;
++import hudson.plugins.gearman.gearmanproject.AbstractProjectStrategy;
++import hudson.plugins.gearman.gearmanproject.WorkflowJobStrategy;
+ 
+ import java.io.IOException;
+ import java.net.InetSocketAddress;
+@@ -57,6 +60,10 @@
+      */
+     public GearmanPluginConfig() {
+         load();
++
++        GearmanProjectFactory gpFactory = GearmanProjectFactory.getInstance();
++        gpFactory.registerStrategy(AbstractProjectStrategy.class);
++        gpFactory.registerStrategy(WorkflowJobStrategy.class);
+     }
+ 
+     public static GearmanPluginConfig get() {
+diff -ruN -x '.git*' orig-gearman-plugin/src/main/java/hudson/plugins/gearman/GearmanPluginUtil.java gearman-plugin/src/main/java/hudson/plugins/gearman/GearmanPluginUtil.java
+--- orig-gearman-plugin/src/main/java/hudson/plugins/gearman/GearmanPluginUtil.java	2017-01-04 09:56:58.753813805 -0200
++++ gearman-plugin/src/main/java/hudson/plugins/gearman/GearmanPluginUtil.java	2017-01-04 13:09:48.149332603 -0200
+@@ -18,9 +18,11 @@
+ 
+ package hudson.plugins.gearman;
+ 
+-import hudson.model.AbstractProject;
+ import hudson.model.Computer;
++import hudson.model.Item;
+ import hudson.model.Run;
++import hudson.plugins.gearman.gearmanproject.GearmanProjectFactory;
++import hudson.plugins.gearman.gearmanproject.GearmanProject;
+ import hudson.security.ACL;
+ 
+ import java.io.IOException;
+@@ -77,7 +79,11 @@
+ 
+         SecurityContext oldContext = ACL.impersonate(ACL.SYSTEM);
+         try {
+-            AbstractProject<?,?> project = Jenkins.getActiveInstance().getItemByFullName(jobName, AbstractProject.class);
++            Item item = Jenkins.getActiveInstance().getItemByFullName(jobName, Item.class);
++
++            GearmanProjectFactory gpFactory = GearmanProjectFactory.getInstance();
++            GearmanProject project = gpFactory.create(item);
++
+             if (project != null){
+                 Run<?,?> run = project.getBuildByNumber(buildNumber);
+                 if (run != null) {
+diff -ruN -x '.git*' orig-gearman-plugin/src/main/java/hudson/plugins/gearman/gearmanproject/AbstractProjectStrategy.java gearman-plugin/src/main/java/hudson/plugins/gearman/gearmanproject/AbstractProjectStrategy.java
+--- orig-gearman-plugin/src/main/java/hudson/plugins/gearman/gearmanproject/AbstractProjectStrategy.java	1969-12-31 21:00:00.000000000 -0300
++++ gearman-plugin/src/main/java/hudson/plugins/gearman/gearmanproject/AbstractProjectStrategy.java	2017-01-03 14:07:17.482005622 -0200
+@@ -0,0 +1,82 @@
++package hudson.plugins.gearman.gearmanproject;
++
++import hudson.plugins.gearman.Constants;
++
++import hudson.model.AbstractProject;
++import hudson.model.Action;
++import hudson.model.Cause;
++import hudson.model.Item;
++import hudson.model.Label;
++import hudson.model.queue.QueueTaskFuture;
++import hudson.model.Run;
++
++import java.util.Collection;
++
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++
++
++/**
++ * Implementation of GearmanProject interface to support
++ * hudson.model.AbstractProject.
++ *
++ * @author Davi Diorio Mendes
++ */
++public class AbstractProjectStrategy implements GearmanProject {
++
++    private static final Logger logger = LoggerFactory
++            .getLogger(Constants.PLUGIN_LOGGER_NAME);
++
++    /**
++     * Wrapped jenkins item.
++     */
++    private AbstractProject<?, ?> project;
++
++    /**
++     * Sole constructor.
++     */
++    public AbstractProjectStrategy(Item item) {
++        if (!AbstractProject.class.isInstance(item)) {
++            throw new ClassCastException("Not an AbstractProject");
++        }
++
++        logger.info("GearmanProject: new AbstractProjectStrategy wrapping " +
++                item.getName());
++        this.project = (AbstractProject<?, ?>) item;
++    }
++
++    @Override
++    public String getName() {
++        return this.project.getName();
++    }
++
++    @Override
++    public Run<?, ?> getBuildByNumber(int n) {
++        return this.project.getBuildByNumber(n);
++    }
++
++    @Override
++    public int getNextBuildNumber() {
++        return this.project.getNextBuildNumber();
++    }
++
++    @Override
++    public boolean isDisabled() {
++        return this.project.isDisabled();
++    }
++
++    @Override
++    public QueueTaskFuture<?> scheduleBuild2(int quietPeriod, Cause c, Action[] actions) {
++        return this.project.scheduleBuild2(quietPeriod, c, actions);
++    }
++
++    @Override
++    public Label getAssignedLabel() {
++        return this.project.getAssignedLabel();
++    }
++
++    @Override
++    public Item getItem() {
++        return (Item) this.project;
++    }
++}
+diff -ruN -x '.git*' orig-gearman-plugin/src/main/java/hudson/plugins/gearman/gearmanproject/GearmanProjectFactory.java gearman-plugin/src/main/java/hudson/plugins/gearman/gearmanproject/GearmanProjectFactory.java
+--- orig-gearman-plugin/src/main/java/hudson/plugins/gearman/gearmanproject/GearmanProjectFactory.java	1969-12-31 21:00:00.000000000 -0300
++++ gearman-plugin/src/main/java/hudson/plugins/gearman/gearmanproject/GearmanProjectFactory.java	2017-01-03 14:07:17.482005622 -0200
+@@ -0,0 +1,135 @@
++package hudson.plugins.gearman.gearmanproject;
++
++import hudson.model.Item;
++import hudson.plugins.gearman.Constants;
++
++import java.lang.reflect.Constructor;
++import java.util.ArrayList;
++import java.util.HashMap;
++import java.util.List;
++
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++
++/**
++ * Wraps jenkins items into GearmanProjects.
++ *
++ * @author Davi Diorio Mendes
++ */
++public class GearmanProjectFactory {
++
++    private static final Logger logger = LoggerFactory
++            .getLogger(Constants.PLUGIN_LOGGER_NAME);
++
++    /**
++     * Singleton instance.
++     */
++    private static GearmanProjectFactory instance;
++
++    /**
++     * GearmanProject implementations.
++     *
++     * Register new implementations using registerStrategy.
++     * @see registerStrategy
++     */
++    private ArrayList<Class<? extends GearmanProject>> strategies;
++
++    /**
++     * Cached jenkins items wrapped as GearmanProjects.
++     */
++    private HashMap<String, GearmanProject> cachedProjects;
++
++    /**
++     * Gets factory instance.
++     *
++     * @return Factory instance.
++     */
++    public static GearmanProjectFactory getInstance() {
++        logger.debug("GearmanProjectFactory instance requested.");
++        if (GearmanProjectFactory.instance == null) {
++            logger.debug("No GearmanProjectFactory instance found.");
++            GearmanProjectFactory.instance = new GearmanProjectFactory();
++        }
++        return GearmanProjectFactory.instance;
++    }
++
++    /**
++     * Constructor
++     */
++    private GearmanProjectFactory() {
++        logger.debug("Constructing new GearmanProjectFactory instance.");
++        this.strategies = new ArrayList<Class<? extends GearmanProject>>();
++        this.cachedProjects = new HashMap<String, GearmanProject>();
++    }
++
++    /**
++     * Register a new strategy (GearmanProject) to the factory.
++     *
++     * @param strategy Class reference to the strategy implementation.
++     */
++    public void registerStrategy(Class<? extends GearmanProject> strategy) {
++        if (this.strategies.indexOf(strategy) == -1) {
++            logger.info("GearmanProjectFactory: registering new strategy: " +
++                    strategy.getName());
++
++            this.strategies.add(strategy);
++        } else {
++            logger.error("GearmanProjectFactory: trying to register " +
++                    strategy.getName() +
++                    ". Already registered.");
++        }
++    }
++
++    /**
++     * Wrap a jenkins item with a strategy.
++     *
++     * @return GearmanProject wrapping the required jenkins item.
++     */
++    private GearmanProject wrap(Item input) {
++        logger.info("GearmanProject: wrapping " +
++                    input.getName() +
++                    " into strategy.");
++
++        GearmanProject project = null;
++        for (Class<? extends GearmanProject> strategy : strategies) {
++            try {
++                Constructor<?> c = strategy.getConstructor(Item.class);
++                Object o = c.newInstance(input);
++
++                if (GearmanProject.class.isInstance(o)) {
++                    project = (GearmanProject) o;
++                    break;
++                }
++            } catch(Exception e) {
++                logger.debug(strategy.getName() + " is not a suitable strategy for " + input.getName());
++                continue;
++            }
++        }
++
++        if (project == null) {
++            logger.error("Non-supported Jenkins item: " + input.getName());
++            throw new ClassCastException("Non-supported Jenkins item.");
++        }
++
++        return project;
++    }
++
++    /**
++     * Return a GearmanProject that wraps item.
++     *
++     * @param input A jenkins item to wrap.
++     *
++     * @return GearmanProject wrapping item.
++     */
++    public GearmanProject create(Item input) {
++        GearmanProject proj = this.cachedProjects.get(input.getName());
++
++        if (proj == null) {
++            proj = this.wrap(input);
++            this.cachedProjects.put(input.getName(), proj);
++            return proj;
++        }
++
++        return proj;
++    }
++}
+diff -ruN -x '.git*' orig-gearman-plugin/src/main/java/hudson/plugins/gearman/gearmanproject/GearmanProject.java gearman-plugin/src/main/java/hudson/plugins/gearman/gearmanproject/GearmanProject.java
+--- orig-gearman-plugin/src/main/java/hudson/plugins/gearman/gearmanproject/GearmanProject.java	1969-12-31 21:00:00.000000000 -0300
++++ gearman-plugin/src/main/java/hudson/plugins/gearman/gearmanproject/GearmanProject.java	2017-01-03 14:07:17.482005622 -0200
+@@ -0,0 +1,33 @@
++package hudson.plugins.gearman.gearmanproject;
++
++import hudson.model.Action;
++import hudson.model.Cause;
++import hudson.model.Item;
++import hudson.model.Label;
++import hudson.model.queue.QueueTaskFuture;
++import hudson.model.Run;
++
++import java.lang.UnsupportedOperationException;
++import java.util.Collection;
++
++
++/**
++ * Interface a strategy to serve gearman-plugin with jenkins items.
++ */
++public interface GearmanProject {
++
++    public String getName();
++
++    public Run<?, ?> getBuildByNumber(int n);
++
++    public int getNextBuildNumber();
++
++    public boolean isDisabled();
++
++    public QueueTaskFuture<?> scheduleBuild2(int quietPeriod, Cause c, Action[] actions);
++
++    public Label getAssignedLabel();
++
++    public Item getItem();
++
++}
+diff -ruN -x '.git*' orig-gearman-plugin/src/main/java/hudson/plugins/gearman/gearmanproject/WorkflowJobStrategy.java gearman-plugin/src/main/java/hudson/plugins/gearman/gearmanproject/WorkflowJobStrategy.java
+--- orig-gearman-plugin/src/main/java/hudson/plugins/gearman/gearmanproject/WorkflowJobStrategy.java	1969-12-31 21:00:00.000000000 -0300
++++ gearman-plugin/src/main/java/hudson/plugins/gearman/gearmanproject/WorkflowJobStrategy.java	2017-01-03 14:07:17.483005617 -0200
+@@ -0,0 +1,166 @@
++package hudson.plugins.gearman.gearmanproject;
++
++import hudson.model.Action;
++import hudson.model.Cause;
++import hudson.model.Item;
++import hudson.model.Label;
++import hudson.model.queue.QueueTaskFuture;
++import hudson.model.Run;
++import hudson.plugins.gearman.Constants;
++
++import java.lang.ClassLoader;
++import java.lang.reflect.InvocationTargetException;
++import java.lang.reflect.Method;
++import java.lang.UnsupportedOperationException;
++import java.util.Collection;
++
++import jenkins.model.Jenkins;
++
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++
++
++/**
++ * Implementation of GearmanProject interface to support
++ * org.jenkinsci.plugins.workflow.job.WorkflowJob.
++ *
++ * @author Davi Diorio Mendes
++ */
++public class WorkflowJobStrategy implements GearmanProject {
++
++    private static final Logger logger = LoggerFactory
++            .getLogger(Constants.PLUGIN_LOGGER_NAME);
++
++    private final Item project;
++    private final Class<?> workflowJobClass;
++
++    public WorkflowJobStrategy(Item item) {
++        ClassLoader uberClassLoader = Jenkins.getActiveInstance().pluginManager.uberClassLoader;
++
++        try {
++            this.workflowJobClass = uberClassLoader.loadClass("org.jenkinsci.plugins.workflow.job.WorkflowJob");
++        } catch(ClassNotFoundException e) {
++            logger.error("GearmanProject: no support to WorkflowJob.");
++            throw new TypeNotPresentException("No support to WorkflowJob.", new Throwable("No support to WorkflowJob."));
++        }
++
++        if (this.workflowJobClass.isInstance(item)) {
++            this.project = item;
++        } else {
++            throw new ClassCastException("Not a WorkflowJob");
++        }
++
++        logger.info("GearmanProject: new WorkflowJobStrategy wrapping " +
++                item.getName());
++    }
++
++    public String getName() {
++        return this.project.getName();
++    }
++
++    public Run<?, ?> getBuildByNumber(int n) {
++        Object result = null;
++        try {
++            Method m = this.workflowJobClass.getDeclaredMethod("getBuildByNumber", Integer.TYPE);
++            result = m.invoke(this.project, n);
++        } catch(NoSuchMethodException e) {
++            logger.error("GearmanProject: " + this.project.getName() + " has no getBuildByNumber method.");
++            return null;
++        } catch(IllegalAccessException e) {
++            logger.error("GearmanProject: WorkflowJobStrategy: cannot access getBuildByNumber: " + this.project.getName());
++            return null;
++        } catch(InvocationTargetException e) {
++            logger.error("GearmanProject: WorkflowJobStrategy: " + e.getMessage());
++            return null;
++        }
++
++        if (Run.class.isInstance(result)) {
++            return (Run<?, ?>) result;
++        } else {
++            logger.error("GearmanProject: WorkflowJobStrategy: getBuildByNumber returned garbage: " + this.project.getName());
++            return null;
++        }
++    }
++
++    public int getNextBuildNumber() {
++        Object result = null;
++        try {
++            Method m = this.workflowJobClass.getDeclaredMethod("getNextBuildNumber");
++            result = m.invoke(this.project);
++        } catch(NoSuchMethodException e) {
++            logger.error("GearmanProject: " + this.project.getName() + " has no getNextBuildNumber method.");
++            return -1;
++        } catch(IllegalAccessException e) {
++            logger.error("GearmanProject: WorkflowJobStrategy: cannot access getNextBuildNumber: " + this.project.getName());
++            return -1;
++        } catch(InvocationTargetException e) {
++            logger.error("GearmanProject: WorkflowJobStrategy: " + e.getMessage());
++            return -1;
++        }
++
++        if (Integer.class.isInstance(result)) {
++            return ((Integer) result).intValue();
++        } else {
++            logger.error("GearmanProject: WorkflowJobStrategy: getNextBuildNumber returned garbage: " + this.project.getName());
++            return -1;
++        }
++    }
++
++    public boolean isDisabled() {
++        return false;
++    }
++
++    public QueueTaskFuture<?> scheduleBuild2(int quietPeriod, Cause c, Action[] actions) {
++        Object result = null;
++        try {
++            Method m = this.workflowJobClass.getDeclaredMethod("scheduleBuild2",
++                    new Class<?>[]{Integer.TYPE, Action[].class});
++            result = m.invoke(this.project, quietPeriod, actions);
++        } catch(NoSuchMethodException e) {
++            logger.error("GearmanProject: " + this.project.getName() + " has no scheduleBuild2 method.");
++            return null;
++        } catch(IllegalAccessException e) {
++            logger.error("GearmanProject: WorkflowJobStrategy: cannot access scheduleBuild2: " + this.project.getName());
++            return null;
++        } catch(InvocationTargetException e) {
++            logger.error("GearmanProject: WorkflowJobStrategy: " + e.getMessage());
++            return null;
++        }
++
++        if (QueueTaskFuture.class.isInstance(result)) {
++            return (QueueTaskFuture<?>) result;
++        } else {
++            logger.error("GearmanProject: WorkflowJobStrategy: scheduleBuild2 returned garbage: " + this.project.getName());
++            return null;
++        }
++    }
++
++    public Label getAssignedLabel() {
++        Object result = null;
++        try {
++            Method m = this.workflowJobClass.getDeclaredMethod("getAssignedLabel");
++            result = m.invoke(this.project);
++        } catch(NoSuchMethodException e) {
++            logger.error("GearmanProject: " + this.project.getName() + " has no getAssignedLabel method.");
++            return null;
++        } catch(IllegalAccessException e) {
++            logger.error("GearmanProject: WorkflowJobStrategy: cannot access getAssignedLabel: " + this.project.getName());
++            return null;
++        } catch(InvocationTargetException e) {
++            logger.error("GearmanProject: WorkflowJobStrategy: " + e.getMessage());
++            return null;
++        }
++
++        if (Label.class.isInstance(result)) {
++            return (Label) result;
++        } else {
++            logger.error("GearmanProject: WorkflowJobStrategy: getAssignedLabel returned garbage: " + this.project.getName());
++            return null;
++        }
++    }
++
++    public Item getItem() {
++        return this.project;
++    }
++
++}
+diff -ruN -x '.git*' orig-gearman-plugin/src/main/java/hudson/plugins/gearman/SaveableListenerImpl.java gearman-plugin/src/main/java/hudson/plugins/gearman/SaveableListenerImpl.java
+--- orig-gearman-plugin/src/main/java/hudson/plugins/gearman/SaveableListenerImpl.java	2017-01-03 10:12:28.690290148 -0200
++++ gearman-plugin/src/main/java/hudson/plugins/gearman/SaveableListenerImpl.java	2017-01-03 14:07:17.482005622 -0200
+@@ -19,10 +19,10 @@
+ package hudson.plugins.gearman;
+ 
+ import hudson.Extension;
+-import hudson.XmlFile;
+-import hudson.model.Saveable;
+-import hudson.model.AbstractProject;
++import hudson.model.Item;
+ import hudson.model.listeners.SaveableListener;
++import hudson.model.Saveable;
++import hudson.XmlFile;
+ 
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+@@ -51,7 +51,7 @@
+ 
+         // only look for changes to projects, specifically for project
+         // label changes.  Node changes are handled in ComputerListenerImpl
+-        if (o instanceof AbstractProject) {
++        if (o instanceof Item) {
+             GearmanProxy.getInstance().registerJobs();
+         }
+     }
+diff -ruN -x '.git*' orig-gearman-plugin/src/main/java/hudson/plugins/gearman/StartJobWorker.java gearman-plugin/src/main/java/hudson/plugins/gearman/StartJobWorker.java
+--- orig-gearman-plugin/src/main/java/hudson/plugins/gearman/StartJobWorker.java	2017-01-03 10:12:28.690290148 -0200
++++ gearman-plugin/src/main/java/hudson/plugins/gearman/StartJobWorker.java	2017-01-03 14:07:17.482005622 -0200
+@@ -19,20 +19,23 @@
+ 
+ package hudson.plugins.gearman;
+ 
+-import hudson.model.Action;
+-import hudson.model.ParameterValue;
+-import hudson.model.Result;
+ import hudson.model.AbstractBuild;
+-import hudson.model.AbstractProject;
++import hudson.model.Action;
+ import hudson.model.Cause;
+ import hudson.model.Computer;
+ import hudson.model.Hudson;
+-import hudson.model.Queue;
++import hudson.model.Item;
+ import hudson.model.labels.LabelAtom;
+ import hudson.model.Node;
+-import hudson.model.TextParameterValue;
++import hudson.model.ParameterValue;
++import hudson.model.Queue;
+ import hudson.model.queue.QueueTaskFuture;
++import hudson.model.Result;
++import hudson.model.Run;
++import hudson.model.TextParameterValue;
+ import hudson.slaves.OfflineCause;
++import hudson.plugins.gearman.gearmanproject.GearmanProjectFactory;
++import hudson.plugins.gearman.gearmanproject.GearmanProject;
+ 
+ import java.util.ArrayList;
+ import java.util.Date;
+@@ -70,11 +73,11 @@
+             .getLogger(Constants.PLUGIN_LOGGER_NAME);
+ 
+     Computer computer;
+-    AbstractProject<?, ?> project;
++    Item project;
+     String masterName;
+     MyGearmanWorkerImpl worker;
+ 
+-    public StartJobWorker(AbstractProject<?, ?> project, Computer computer, String masterName,
++    public StartJobWorker(Item project, Computer computer, String masterName,
+                           MyGearmanWorkerImpl worker) {
+         this.project = project;
+         this.computer = computer;
+@@ -82,9 +85,9 @@
+         this.worker = worker;
+     }
+ 
+-   private String buildStatusData(AbstractBuild<?, ?> build) {
++   private String buildStatusData(Run<?, ?> build) {
+        Hudson hudson = Hudson.getInstance();
+-       AbstractProject<?, ?> project = build.getProject();
++       Item project = build.getParent();
+ 
+        Map data = new HashMap<String, String>();
+ 
+@@ -103,16 +106,18 @@
+            data.put("result", result.toString());
+        }
+ 
+-       ArrayList<String> nodeLabels = new ArrayList<String>();
+-       Node node = build.getBuiltOn();
+-       if (node != null) {
+-           Set<LabelAtom> nodeLabelAtoms = node.getAssignedLabels();
+-           for (LabelAtom labelAtom : nodeLabelAtoms) {
+-               nodeLabels.add(labelAtom.getDisplayName());
++       if (AbstractBuild.class.isInstance(build)) {
++           ArrayList<String> nodeLabels = new ArrayList<String>();
++           Node node = ((AbstractBuild<?, ?>) build).getBuiltOn();
++           if (node != null) {
++               Set<LabelAtom> nodeLabelAtoms = node.getAssignedLabels();
++               for (LabelAtom labelAtom : nodeLabelAtoms) {
++                   nodeLabels.add(labelAtom.getDisplayName());
++               }
+            }
++           data.put("node_labels", nodeLabels);
++           data.put("node_name", node.getNodeName());
+        }
+-       data.put("node_labels", nodeLabels);
+-       data.put("node_name", node.getNodeName());
+ 
+        Gson gson = new Gson();
+        return gson.toJson(data);
+@@ -183,6 +188,9 @@
+ 
+         availability.expectUUID(decodedUniqueId);
+ 
++        GearmanProjectFactory gpFactory = GearmanProjectFactory.getInstance();
++        GearmanProject project = gpFactory.create(this.project);
++
+         // schedule jenkins to build project
+         logger.info("---- Worker " + this.worker + " scheduling " +
+                     project.getName()+" build #" +
+@@ -209,7 +217,7 @@
+ 
+             // wait for start of build
+             Queue.Executable exec = future.getStartCondition().get();
+-            AbstractBuild<?, ?> currBuild = (AbstractBuild<?, ?>) exec;
++            Run<?, ?> currBuild = (Run<?, ?>) exec;
+ 
+             if (!offlineWhenComplete) {
+                 // Unlock the monitor for this worker

@@ -1,0 +1,920 @@
+diff --git a/pom.xml b/pom.xml
+index 03e8ec6..b099626 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -87,7 +87,7 @@
+             <version>${workflow.version}</version>
+         </dependency>
+ 
+-        <!-- Test dependencies -->
++        <!-- Test dependencies
+         <dependency>
+             <groupId>org.jenkins-ci.plugins</groupId>
+             <artifactId>git</artifactId>
+@@ -113,6 +113,6 @@
+             <version>${workflow.version}</version>
+             <classifier>tests</classifier>
+             <scope>test</scope>
+-        </dependency>
++        </dependency> -->
+     </dependencies>
+ </project>
+diff --git a/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy b/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy
+index b9ded4f..45db103 100644
+--- a/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy
++++ b/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy
+@@ -24,14 +24,30 @@
+ package org.jenkinsci.plugins.simpletravisrunner
+ 
+ import com.cloudbees.groovy.cps.NonCPS
++import groovy.json.JsonSlurper
++import groovy.util.XmlSlurper
++import java.net.URL
++import java.security.MessageDigest
++import java.util.function.Consumer
+ import org.jenkinsci.plugins.workflow.cps.CpsScript
+ import org.yaml.snakeyaml.Yaml
+ 
+ class SimpleTravisRunner implements Serializable {
++    private static final String aptSourceWhitelistURI = "https://raw.githubusercontent.com/travis-ci/apt-source-whitelist/master/ubuntu.json"
++    private static final Map<String, String> defaultEnv = [
++        TRAVIS_OS_NAME: ["linux"],
++    ]
++    private static final def languages = [
++        go: LanguageGoEnvironment,
++    ]
++
+     private CpsScript script;
++    private final Map<String, Object> aptSourceWhitelist;
+ 
+     public SimpleTravisRunner(CpsScript script) {
+         this.script = script;
++        def whitelistJson = new URL(aptSourceWhitelistURI).getText()
++        // this.aptSourceWhitelist = new JsonSlurper().parseText(whitelistJson)
+     }
+ 
+     /**
+@@ -43,54 +59,84 @@ class SimpleTravisRunner implements Serializable {
+      *                    just run on 'node { }'.
+      * @param timeout Optional timeout, in minutes, for individual steps - defaults to 50 minutes, like travis-ci.org.
+      */
+-    public void call(String path, String labelExpr = null, Integer timeout = 50) {
+-        if (script.env.HOME != null) {
+-            script.error("simpleTravisRunner(travisFile[, label, timeout]) cannot be run within a 'node { ... }' block.")
+-        } else {
+-            try {
+-                script.node(labelExpr) {
+-                    script.checkout script.scm
+-                    String travisFile = script.readFile(path)
+-
+-                    def travisSteps = readAndConvertTravis(travisFile)
++    public void call(String path, String labelExpr = null, Integer timeout = 50, scm = null) {
++        Map<String, Object> travisSteps = null
++        String label = null
++
++        script.node(labelExpr) {
++            script.git scm
++            String travisFile = script.readFile(path)
++            travisSteps = readAndConvertTravis(travisFile)
++
++            label = null
++            if (labelExpr != null) {
++                label = labelExpr
++            } else if (travisSteps.containsKey("dist")) {
++                label = travisSteps.get("dist").toString()
++            }
+ 
+-                    def envCombos
++            script.stash(includes: "**, .git*", name: "source")
++        }
+ 
+-                    // Let's see what we get from env!
+-                    if (travisSteps.containsKey("env")) {
+-                        envCombos = generateEnvCombinations(travisSteps.get("env"))
+-                    }
++        script.node(label) {
++            TravisEnvMatrix envMatrix = new TravisEnvMatrix(defaultEnv, script)
++            def envCombos
+ 
+-                    if (envCombos != null && envCombos.size() > 0) {
+-                        def parallelInvocations = [:]
++            script.unstash(name: "source")
+ 
+-                        for (int i = 0; i < envCombos.size(); i++) {
+-                            def thisEnv = envCombos.get(i)
+-                            parallelInvocations[thisEnv.toString()] = {
+-                                script.node(labelExpr) {
+-                                    script.withEnv(thisEnv, executeSteps(travisSteps, true, timeout))
+-                                }
+-                            }
+-                        }
++            if (travisSteps.containsKey("env")) {
++                generateEnvMatrix(travisSteps.get("env"), envMatrix)
++            }
+ 
+-                        script.stage "Parallel Travis Execution"
+-                        script.parallel parallelInvocations
++            if (travisSteps.containsKey("language") &&
++                    languages.containsKey(travisSteps.get("language"))) {
++                languages \
++                    .get(travisSteps.get("language"))
++                    .newInstance().call(script, travisSteps, envMatrix)
++            }
+ 
+-                    } else {
+-                        executeSteps(travisSteps, false, timeout).call()
+-                    }
++            envCombos = envMatrix.combinations()
++            processSteps(travisSteps, envCombos, label, timeout)
++        }
++    }
+ 
++    private def processSteps(travisSteps, envCombos, label, timeout) {
++        if (envCombos != null && envCombos.size() > 0) {
++            // def parallelInvocations = [:]
++
++            // for (int i = 0; i < envCombos.size(); i++) {
++            //     def thisEnv = envCombos.get(i)
++            //     parallelInvocations[thisEnv.toString()] = {
++            //         script.node(label) {
++            //             script.withEnv(thisEnv, executeSteps(travisSteps, true, timeout))
++            //         }
++            //     }
++            // }
++
++            // script.stage "Parallel Travis Execution"
++            // script.parallel parallelInvocations
++
++            for (Map<String, String> env : envCombos) {
++                script.echo("Running with env: " + env.toString())
++                script.withEnv(env) {
++                    executeSteps(travisSteps, false, timeout).call()
+                 }
+-            } catch (IllegalStateException e) {
+-                script.error("simpleTravisRunner(travisFile[, label, timeout]) can only be run in a Pipeline script from SCM.")
+             }
+-        }
+ 
++        } else {
++            executeSteps(travisSteps, false, timeout).call()
++        }
+     }
+ 
+     private def executeSteps(travisSteps, boolean inParallel, Integer timeout) {
+         return {
+             // Fail fast on any errors in before_install, install or before_script
++            if (travisSteps.containsKey("addons")) {
++                def addons = travisSteps.get("addons")
++                if (addons.containsKey("apt")) {
++                    addonsApt(addons.get("apt"), inParallel, timeout)
++                }
++            }
+             if (travisSteps.containsKey("before_install")) {
+                 if (!inParallel)
+                     script.stage "Travis Before Install"
+@@ -169,6 +215,66 @@ class SimpleTravisRunner implements Serializable {
+         }
+     }
+ 
++    private def addonsApt(apt, boolean inParallel, int timeout) {
++        if (apt.containsKey("sources")) {
++            if (!inParallel) {
++                script.stage "Addons APT - Sources"
++            }
++
++            def sources = apt.get("sources")
++
++            for (def source : sources) {
++                String sourceline = null
++                String key_url = null
++
++                if (source instanceof String) {
++                    // Get sourceline and key_url from whitelist
++                    script.echo 'XABLAU!'
++                } else {
++                    if (source.containsKey("sourceline")) {
++                        sourceline = (String) source.get("sourceline")
++                    }
++                    if (source.containsKey("key_url")) {
++                        key_url = (String) source.get("key_url")
++                    }
++                }
++
++                if (key_url != null) {
++                    script.timeout(timeout) {
++                        script.sh("curl " + key_url + " | sudo apt-key add ")
++                    }
++                }
++                if (sourceline != null) {
++                    if (sourceline.startsWith("deb")) {
++                        script.timeout(timeout) {
++                            script.sh("echo " + sourceline + " | " +
++                                      "sudo tee -a /etc/apt/sources.list")
++                        }
++                    } else if (sourceline.startsWith("ppa")) {
++                        script.timeout(timeout) {
++                            script.sh("sudo add-apt-repository -y " + sourceline)
++                        }
++                    }
++                }
++            }
++        }
++
++        if (apt.containsKey("packages")) {
++            if (!inParallel) {
++                script.stage "Addons APT - Packages"
++            }
++
++            ArrayList<String> packages = (ArrayList<String>) apt.get("packages")
++
++            script.timeout(timeout) {
++                script.sh("sudo apt-get update -qq")
++            }
++            script.timeout(timeout) {
++                script.sh("sudo apt-get install -y " + packages.join(" "))
++            }
++        }
++    }
++
+     /**
+      * Takes a Travis "step", which could either be a String or an ArrayList of Strings, and returns an array of
+      * Pipeline "sh" steps inside a closure to execute those "steps".
+@@ -217,33 +323,37 @@ class SimpleTravisRunner implements Serializable {
+      * @param travisEnv
+      * @return a map of environment keys to lists of values for the key
+      */
+-    private def generateEnvAxes(travisEnv) {
+-        def rawEnvEntries = getYamlStringOrListAsList(travisEnv)
++    private def generateEnvMatrix(travisEnv, envMatrix) {
++        def rawEnvEntries = null
+ 
+-        def envEntries = [:]
+-
+-        for (def entryString in rawEnvEntries.toSet()) {
+-            if (entryString instanceof String) {
++        if (travisEnv instanceof Map) {
++            rawEnvEntries = []
++            for (Map.Entry<?, ?> e : travisEnv.entrySet()) {
++                rawEnvEntries += getYamlStringOrListAsList(e.getValue())
++            }
++        } else {
++            rawEnvEntries = getYamlStringOrListAsList(travisEnv)
++        }
+ 
+-                def cleanedString = stripLeadingTrailingQuotes(entryString)
++        for (def entry in rawEnvEntries.toSet()) {
++            if (entry instanceof String) {
++                def cleanedString = stripLeadingTrailingQuotes(entry)
+                 def stringParts = cleanedString.split("=")
+ 
+                 if (stringParts != null && stringParts.size() == 2) {
+-                    if (!(envEntries.containsKey(stringParts[0]))) {
+-                        envEntries[stringParts[0]] = []
+-                    }
+-                    envEntries[stringParts[0]].add(stringParts[1])
++                    envMatrix.put(stringParts[0], stripLeadingTrailingQuotes(stringParts[1]))
++                }
++            } else if (entry instanceof Map) {
++                def entrySet = entry.entrySet()
++                for (Map.Entry e : entrySet) {
++                    envMatrix.put(e.getKey(), stripLeadingTrailingQuotes(e.getValue()))
+                 }
+             }
+         }
+-
+-        return envEntries
+     }
+ 
+ 
+-    private def generateEnvCombinations(travisEnv) {
+-        Map<String,List<Object>> axes = generateEnvAxes(travisEnv)
+-
++    private def generateEnvCombinations(axes) {
+         List<List<Object>> valueCombos = axes.values().toList().combinations()
+ 
+         def keyList = axes.keySet().toList()
+@@ -298,4 +408,237 @@ class SimpleTravisRunner implements Serializable {
+ 
+         return travisYaml
+     }
++
++    private class LanguageGoEnvironment implements Serializable {
++        private static final String golangBinariesRepositoryURL = "https://storage.googleapis.com/golang/"
++        private static final String gimmeVersionsPrefix = "/var/gimme/versions"
++        private static final String gimmeEnvPrefix = "/var/gimme/envs"
++
++        public void call(CpsScript script, Map<String, Object> travisYml, TravisEnvMatrix envMatrix) {
++            // https://docs.travis-ci.com/user/languages/go/
++            def goversions = []
++            if (travisYml.containsKey("go")) {
++                goversions = (List<?>) travisYml.get("go")
++            } else {
++                goversions = ["master"]
++            }
++
++            // Default install
++            goInstall(script, travisYml)
++
++            // Default test
++            goScript(script, travisYml)
++
++            // Go Versions
++            goVersions(script, envMatrix, goversions)
++        }
++
++        private void goInstall(CpsScript script, Map<String, Object> travisYml) {
++            if (!travisYml.containsKey("install")) {
++                if (script.fileExists("makefile")
++                        || script.fileExists("Makefile")
++                        || script.fileExists("GNUMakefile")
++                        || script.fileExists("BSDmakefile")) {
++                    travisYml.put("install", "true")
++                } else {
++                    travisYml.put("install", "go get -t ./...")
++                }
++            }
++        }
++
++        private void goScript(CpsScript script, Map<String, Object> travisYml) {
++            if (!travisYml.containsKey("script")) {
++                if (script.fileExists("makefile")
++                        || script.fileExists("Makefile")
++                        || script.fileExists("GNUMakefile")
++                        || script.fileExists("BSDmakefile")) {
++                    travisYml.put("script", "make")
++                } else {
++                    travisYml.put("script", "go test -v ./...")
++                }
++            }
++        }
++
++        private void goVersions(CpsScript script, TravisEnvMatrix envMatrix, List<String> goversions) {
++            String os = "linux"
++            String arch = "ppc64le"
++            SortedSet<String> availableVersions = getAvailableVersions(os, arch)
++            ArrayList<String> versions = new ArrayList<String>()
++            envMatrix.put("GOOS", "")
++            envMatrix.put("GOARCH", "")
++
++            for (String version : goversions) {
++                def ver = availableVersions.ceiling(version.toString())
++                if (!versions.contains(ver)) {
++                    versions.add(ver)
++                }
++            }
++
++            for (String version : versions) {
++                script.timeout(30) {
++                    String cmd = $/eval "$(GIMME_ENV_PREFIX="%s" GIMME_VERSION_PREFIX="%s" GIMME_TYPE="binary" GIMME_GO_VERSION=%s gimme)"/$
++                    script.sh(String.format(cmd, gimmeEnvPrefix, gimmeVersionsPrefix, version))
++                }
++
++                String goRoot = "%s/go%s.%s.%s"
++                String path = goRoot + "/bin:${script.env.PATH}"
++                envMatrix.putRelated(
++                    ["TRAVIS_GO_VERSION", "GOROOT", "PATH"],
++                    [version,
++                     String.format(goRoot, gimmeVersionsPrefix, version, os, arch),
++                     String.format(path, gimmeVersionsPrefix, version, os, arch)]
++                )
++            }
++        }
++
++        private SortedSet<String> getAvailableVersions(String os, String arch) {
++            String golang_binaries = new URL(golangBinariesRepositoryURL).getText()
++            def ListBucketResult = new XmlSlurper().parseText(golang_binaries)
++
++            TreeSet<String> availableVersions = new TreeSet<String>()
++            String keyPattern = String.format(/go\d\.\d\.\d\.%s-%s.+/, os, arch)
++            for(def content : ListBucketResult.Contents) {
++                if (content.Key.text() ==~ keyPattern) {
++                    availableVersions.add(content.Key.text().substring(2,7))
++                }
++            }
++
++            return availableVersions
++        }
++    }
++
++    private class TravisEnvMatrix implements Serializable {
++
++        private Map<String, List<Object>> values
++        private Map<List<String>, List<List<String>>> relationsMatrix
++        private List<String> relatedKeys
++
++        private CpsScript script
++
++        public TravisEnvMatrix(Map<String, List<String>> defaults, CpsScript script) {
++            this.values = new LinkedHashMap<String, List<Object>>()
++            this.relationsMatrix = new LinkedHashMap<List<String>, List<List<String>>>()
++            this.relatedKeys = new ArrayList<String>()
++
++            this.script = script
++
++            this.values.putAll(defaults)
++            print values.toString()
++        }
++
++        public List<Object> get(String key) {
++            return values.get(key)
++        }
++
++        private List<Object> uncheckedPut(String key, Object value) {
++            List<Object> previousValue = values.get(key)
++            if (previousValue == null) {
++                List<Object> l = new ArrayList<Object>()
++                l.add(value)
++                values.put(key, l)
++            } else {
++                values.get(key).add(value)
++            }
++
++            return previousValue
++        }
++
++        public List<Object> put(String key, Object value) {
++            if (relatedKeys.contains(key)) {
++                throw new IllegalArgumentException("Cannot add value to related key.")
++            }
++
++            return uncheckedPut(key, value)
++        }
++
++        public Map<String, List<Object>> putRelated(List<Object> keys, List<Object> values) {
++            Map returnMap = [:]
++            List sortedValues = values.clone()
++            List sortedKeys = keys.clone()
++            sortedKeys.sort()
++            sortedKeys.trimToSize()
++
++            if (keys.size() != values.size()) {
++                throw new IllegalArgumentException("Expected keys and values to have the same size.")
++            }
++
++            for (int o = 0; o < keys.size(); o++) {
++                String thisKey = keys.get(o)
++
++                // Reorder values to match sorted keys.
++                int n = sortedKeys.indexOf(thisKey)
++                sortedValues.set(n, values.get(o))
++
++                // Get previous value of keys
++                if (this.values.containsKey(thisKey)) {
++                    returnMap.put(thisKey, this.values.get(thisKey))
++                } else {
++                    returnMap.put(thisKey, null)
++                }
++
++                // Save new value
++                this.values.putIfAbsent(thisKey, new ArrayList<List<String>>())
++                this.values.get(thisKey).add(values.get(o))
++
++                // Tag key as related key
++                if (!relatedKeys.contains(thisKey)) {
++                    relatedKeys.add(thisKey)
++                }
++            }
++
++            relationsMatrix.putIfAbsent(sortedKeys, new ArrayList<List<String>>())
++            relationsMatrix.get(sortedKeys).add(sortedValues)
++
++            return returnMap
++        }
++
++        public List<List<String>> combinations() {
++            Map<String, List<Object>> data = values.clone()
++            Map thisRelKeys = [:]
++            String concatenedKeys = ""
++
++            for (Map.Entry relEntry : relationsMatrix) {
++                for (String key : relEntry.getKey()) {
++                    // Remove related keys from data.
++                    data.remove(key)
++                    concatenedKeys = concatenedKeys.concat(key)
++                }
++
++                MessageDigest md = MessageDigest.getInstance("SHA1")
++                md.update(concatenedKeys.getBytes())
++                String digest = new String(md.digest())
++                thisRelKeys.put(digest, relEntry.getKey())
++                // Put combined related values into data.
++                data.put(digest, relEntry.getValue())
++            }
++
++            List valueCombos = data.values().combinations()
++
++            // Resolve combination keys and format final env string.
++            def keyList = data.keySet().toList()
++            def combos = []
++
++            for (int i = 0; i < valueCombos.size(); i++) {
++                List thisCombo = valueCombos.get(i)
++                def thisEnv = []
++                for (int j = 0; j < thisCombo.size(); j++) {
++                    def thisVal = thisCombo.get(j)
++                    def thisKey = keyList.get(j)
++
++                    if (thisVal instanceof List) {
++                        for (int k = 0; k < thisVal.size(); k++) {
++                            thisEnv.add(thisRelKeys.get(thisKey).get(k) + "=" +
++                                        thisVal.get(k))
++                        }
++                    } else {
++                        thisEnv.add(thisKey + "=" + thisVal)
++                    }
++                }
++
++                combos.add(thisEnv)
++            }
++            return combos
++        }
++
++    }
+ }
+diff --git a/src/test/java/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunnerDSLTest.java b/src/test/java/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunnerDSLTest.java
+deleted file mode 100644
+index 06dfedb..0000000
+--- a/src/test/java/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunnerDSLTest.java
++++ /dev/null
+@@ -1,381 +0,0 @@
+-/*
+- * The MIT License
+- *
+- * Copyright (c) 2016, CloudBees, Inc.
+- *
+- * Permission is hereby granted, free of charge, to any person obtaining a copy
+- * of this software and associated documentation files (the "Software"), to deal
+- * in the Software without restriction, including without limitation the rights
+- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+- * copies of the Software, and to permit persons to whom the Software is
+- * furnished to do so, subject to the following conditions:
+- *
+- * The above copyright notice and this permission notice shall be included in
+- * all copies or substantial portions of the Software.
+- *
+- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+- * THE SOFTWARE.
+- */
+-package org.jenkinsci.plugins.simpletravisrunner;
+-
+-import hudson.model.Result;
+-import java.io.File;
+-import java.io.IOException;
+-import java.util.Collections;
+-import java.util.Set;
+-import java.util.TreeSet;
+-import org.apache.commons.io.FileUtils;
+-import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
+-import org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition;
+-import org.jenkinsci.plugins.workflow.job.WorkflowJob;
+-import org.jenkinsci.plugins.workflow.job.WorkflowRun;
+-import org.jenkinsci.plugins.workflow.steps.scm.GitSampleRepoRule;
+-import org.jenkinsci.plugins.workflow.steps.scm.GitStep;
+-import org.jenkinsci.plugins.workflow.test.steps.SemaphoreStep;
+-import static org.junit.Assert.*;
+-import org.junit.ClassRule;
+-import org.junit.Rule;
+-import org.junit.Test;
+-import org.junit.runners.model.Statement;
+-import org.jvnet.hudson.test.BuildWatcher;
+-import org.jvnet.hudson.test.RestartableJenkinsRule;
+-
+-public class SimpleTravisRunnerDSLTest {
+-
+-    @ClassRule public static BuildWatcher buildWatcher = new BuildWatcher();
+-    @Rule public RestartableJenkinsRule story = new RestartableJenkinsRule();
+-    @Rule public GitSampleRepoRule sampleRepo = new GitSampleRepoRule();
+-
+-    @Test public void firstDoNoHarm() {
+-        story.addStep(new Statement() {
+-            @Override public void evaluate() throws Throwable {
+-                WorkflowJob p = story.j.jenkins.createProject(WorkflowJob.class, "p");
+-                p.setDefinition(new CpsFlowDefinition("semaphore 'wait'", true));
+-                WorkflowRun b = p.scheduleBuild2(0).waitForStart();
+-                SemaphoreStep.waitForStart("wait/1", b);
+-            }
+-        });
+-        story.addStep(new Statement() {
+-            @Override public void evaluate() throws Throwable {
+-                WorkflowJob p = story.j.jenkins.getItemByFullName("p", WorkflowJob.class);
+-                WorkflowRun b = p.getLastBuild();
+-                assertEquals(Collections.<String>emptySet(), grep(b.getRootDir(),
+-                        "SimpleTravisRunner"));
+-                SemaphoreStep.success("wait/1", null);
+-                story.j.assertBuildStatusSuccess(story.j.waitForCompletion(b));
+-            }
+-        });
+-    }
+-
+-    // TODO copied from BindingStepTest, should be made into a utility in Jenkins test harness perhaps (or JenkinsRuleExt as a first step)
+-    private static Set<String> grep(File dir, String text) throws IOException {
+-        Set<String> matches = new TreeSet<String>();
+-        grep(dir, text, "", matches);
+-        return matches;
+-    }
+-
+-    private static void grep(File dir, String text, String prefix, Set<String> matches) throws IOException {
+-        File[] kids = dir.listFiles();
+-        if (kids == null) {
+-            return;
+-        }
+-        for (File kid : kids) {
+-            String qualifiedName = prefix + kid.getName();
+-            if (kid.isDirectory()) {
+-                grep(kid, text, qualifiedName + "/", matches);
+-            } else if (kid.isFile() && FileUtils.readFileToString(kid).contains(text)) {
+-                matches.add(qualifiedName);
+-            }
+-        }
+-    }
+-
+-    @Test public void failIfNoFile() throws Exception {
+-        sampleRepo.init();
+-        sampleRepo.write("Jenkinsfile", "simpleTravisRunner('no-file')");
+-        sampleRepo.git("add", "Jenkinsfile");
+-        sampleRepo.git("commit", "--message=files");
+-        story.addStep(new Statement() {
+-            @Override public void evaluate() throws Throwable {
+-                WorkflowJob p = story.j.jenkins.createProject(WorkflowJob.class, "p");
+-                p.setDefinition(new CpsScmFlowDefinition(new GitStep(sampleRepo.toString()).createSCM(), "Jenkinsfile"));
+-                story.j.assertLogContains("java.io.FileNotFoundException",
+-                        story.j.assertBuildStatus(Result.FAILURE, p.scheduleBuild2(0).get()));
+-            }
+-        });
+-    }
+-
+-    @Test public void failIfInNode() throws Exception {
+-        sampleRepo.init();
+-        sampleRepo.write("Jenkinsfile", "node { simpleTravisRunner('no-file') }");
+-        sampleRepo.git("add", "Jenkinsfile");
+-        sampleRepo.git("commit", "--message=files");
+-        story.addStep(new Statement() {
+-            @Override public void evaluate() throws Throwable {
+-                WorkflowJob p = story.j.jenkins.createProject(WorkflowJob.class, "p");
+-                p.setDefinition(new CpsScmFlowDefinition(new GitStep(sampleRepo.toString()).createSCM(), "Jenkinsfile"));
+-                story.j.assertLogContains("ERROR: simpleTravisRunner(travisFile[, label, timeout]) cannot be run within a 'node { ... }' block.",
+-                        story.j.assertBuildStatus(Result.FAILURE, p.scheduleBuild2(0).get()));
+-            }
+-        });
+-    }
+-
+-    @Test public void failIfInNotFromSCM() {
+-        story.addStep(new Statement() {
+-            @Override public void evaluate() throws Throwable {
+-                WorkflowJob p = story.j.jenkins.createProject(WorkflowJob.class, "p");
+-                p.setDefinition(new CpsFlowDefinition(
+-                        "simpleTravisRunner('no-file')\n",
+-                        true));
+-                story.j.assertLogContains("ERROR: simpleTravisRunner(travisFile[, label, timeout]) can only be run in a Pipeline script from SCM.",
+-                        story.j.assertBuildStatus(Result.FAILURE, p.scheduleBuild2(0).get()));
+-            }
+-        });
+-    }
+-
+-    @Test public void simpleTravisYml() throws Exception {
+-        sampleRepo.init();
+-        sampleRepo.write("somefile", "");
+-        sampleRepo.write(".travis.yml",
+-                "script: ls -la");
+-        sampleRepo.write("Jenkinsfile", "simpleTravisRunner('.travis.yml')");
+-        sampleRepo.git("add", "Jenkinsfile");
+-        sampleRepo.git("add", "somefile", ".travis.yml");
+-        sampleRepo.git("commit", "--message=files");
+-        story.addStep(new Statement() {
+-            @Override public void evaluate() throws Throwable {
+-                WorkflowJob p = story.j.jenkins.createProject(WorkflowJob.class, "p");
+-                p.setDefinition(new CpsScmFlowDefinition(new GitStep(sampleRepo.toString()).createSCM(), "Jenkinsfile"));
+-                WorkflowRun b = p.scheduleBuild2(0).waitForStart();
+-                story.j.assertLogContains("somefile",
+-                        story.j.assertBuildStatusSuccess(story.j.waitForCompletion(b)));
+-                story.j.assertLogNotContains("Travis Install", b);
+-                story.j.assertLogContains("Travis Script", b);
+-            }
+-        });
+-    }
+-
+-    @Test public void multipleSteps() throws Exception {
+-        sampleRepo.init();
+-        sampleRepo.write("somefile", "");
+-        sampleRepo.write(".travis.yml",
+-                "script:\n" +
+-                        "  - ls -la\n" +
+-                        "  - echo pants\n");
+-        sampleRepo.write("Jenkinsfile", "simpleTravisRunner('.travis.yml')");
+-        sampleRepo.git("add", "Jenkinsfile");
+-        sampleRepo.git("add", "somefile", ".travis.yml");
+-        sampleRepo.git("commit", "--message=files");
+-        story.addStep(new Statement() {
+-            @Override public void evaluate() throws Throwable {
+-                WorkflowJob p = story.j.jenkins.createProject(WorkflowJob.class, "p");
+-                p.setDefinition(new CpsScmFlowDefinition(new GitStep(sampleRepo.toString()).createSCM(), "Jenkinsfile"));
+-                WorkflowRun b = p.scheduleBuild2(0).waitForStart();
+-                story.j.assertLogContains("somefile",
+-                        story.j.assertBuildStatusSuccess(story.j.waitForCompletion(b)));
+-                story.j.assertLogContains("pants", b);
+-                story.j.assertLogNotContains("Travis Install", b);
+-                story.j.assertLogContains("Travis Script", b);
+-            }
+-        });
+-    }
+-
+-    @Test public void failureInScript() throws Exception {
+-        sampleRepo.init();
+-        sampleRepo.write(".travis.yml",
+-                "script: exit 1\n");
+-        sampleRepo.write("Jenkinsfile", "simpleTravisRunner('.travis.yml')");
+-        sampleRepo.git("add", "Jenkinsfile");
+-        sampleRepo.git("add", ".travis.yml");
+-        sampleRepo.git("commit", "--message=files");
+-        story.addStep(new Statement() {
+-            @Override public void evaluate() throws Throwable {
+-                WorkflowJob p = story.j.jenkins.createProject(WorkflowJob.class, "p");
+-                p.setDefinition(new CpsScmFlowDefinition(new GitStep(sampleRepo.toString()).createSCM(), "Jenkinsfile"));
+-                WorkflowRun b = p.scheduleBuild2(0).waitForStart();
+-                story.j.assertLogNotContains("Travis Install",
+-                        story.j.assertBuildStatus(Result.FAILURE, story.j.waitForCompletion(b)));
+-                story.j.assertLogContains("Travis Script", b);
+-            }
+-        });
+-    }
+-
+-    @Test public void multiplePhases() throws Exception {
+-        sampleRepo.init();
+-        sampleRepo.write("somefile", "");
+-        sampleRepo.write(".travis.yml",
+-                "before_install: echo 'in before_install'\n" +
+-                        "install: echo 'in install'\n" +
+-                        "before_script: echo 'in before_script'\n" +
+-                        "script:\n" +
+-                        "  - ls -la\n" +
+-                        "  - echo pants\n" +
+-                        "after_script: echo 'in after_script'\n");
+-        sampleRepo.write("Jenkinsfile", "simpleTravisRunner('.travis.yml')");
+-        sampleRepo.git("add", "Jenkinsfile");
+-        sampleRepo.git("add", "somefile", ".travis.yml");
+-        sampleRepo.git("commit", "--message=files");
+-        story.addStep(new Statement() {
+-            @Override public void evaluate() throws Throwable {
+-                WorkflowJob p = story.j.jenkins.createProject(WorkflowJob.class, "p");
+-                p.setDefinition(new CpsScmFlowDefinition(new GitStep(sampleRepo.toString()).createSCM(), "Jenkinsfile"));
+-                WorkflowRun b = p.scheduleBuild2(0).waitForStart();
+-                story.j.assertLogContains("somefile",
+-                        story.j.assertBuildStatusSuccess(story.j.waitForCompletion(b)));
+-                story.j.assertLogContains("pants", b);
+-                story.j.assertLogContains("in install", b);
+-                story.j.assertLogContains("Travis Before Install", b);
+-                story.j.assertLogContains("Travis Install", b);
+-                story.j.assertLogContains("Travis Before Script", b);
+-                story.j.assertLogContains("Travis Script", b);
+-                story.j.assertLogContains("Travis After Script", b);
+-            }
+-        });
+-    }
+-
+-    @Test public void fastFailOnEarlyPhases() throws Exception {
+-        sampleRepo.init();
+-        sampleRepo.write("somefile", "");
+-        sampleRepo.write(".travis.yml",
+-                "before_install: exit 1\n" +
+-                        "install: echo 'in install'\n" +
+-                        "before_script: echo 'in before_script'\n" +
+-                        "script:\n" +
+-                        "  - ls -la\n" +
+-                        "  - echo pants\n" +
+-                        "after_script: echo 'in after_script'\n");
+-        sampleRepo.write("Jenkinsfile", "simpleTravisRunner('.travis.yml')");
+-        sampleRepo.git("add", "Jenkinsfile");
+-        sampleRepo.git("add", "somefile", ".travis.yml");
+-        sampleRepo.git("commit", "--message=files");
+-        story.addStep(new Statement() {
+-            @Override public void evaluate() throws Throwable {
+-                WorkflowJob p = story.j.jenkins.createProject(WorkflowJob.class, "p");
+-                p.setDefinition(new CpsScmFlowDefinition(new GitStep(sampleRepo.toString()).createSCM(), "Jenkinsfile"));
+-                WorkflowRun b = p.scheduleBuild2(0).waitForStart();
+-                story.j.assertLogContains("Travis Before Install",
+-                        story.j.assertBuildStatus(Result.FAILURE, story.j.waitForCompletion(b)));
+-                story.j.assertLogNotContains("Travis Install", b);
+-                story.j.assertLogNotContains("Travis Before Script", b);
+-                story.j.assertLogNotContains("Travis Script", b);
+-                story.j.assertLogNotContains("Travis After Script", b);
+-            }
+-        });
+-    }
+-
+-    @Test public void failureOnAfterPhasesIgnored() throws Exception {
+-        sampleRepo.init();
+-        sampleRepo.write("somefile", "");
+-        sampleRepo.write(".travis.yml",
+-                "before_install: echo 'in before_install'\n" +
+-                        "install: echo 'in install'\n" +
+-                        "before_script: echo 'in before_script'\n" +
+-                        "script:\n" +
+-                        "  - ls -la\n" +
+-                        "  - echo pants\n" +
+-                        "after_script: exit 1\n");
+-        sampleRepo.write("Jenkinsfile", "simpleTravisRunner('.travis.yml')");
+-        sampleRepo.git("add", "Jenkinsfile");
+-        sampleRepo.git("add", "somefile", ".travis.yml");
+-        sampleRepo.git("commit", "--message=files");
+-        story.addStep(new Statement() {
+-            @Override public void evaluate() throws Throwable {
+-                WorkflowJob p = story.j.jenkins.createProject(WorkflowJob.class, "p");
+-                p.setDefinition(new CpsScmFlowDefinition(new GitStep(sampleRepo.toString()).createSCM(), "Jenkinsfile"));
+-                WorkflowRun b = p.scheduleBuild2(0).waitForStart();
+-                story.j.assertLogContains("somefile",
+-                        story.j.assertBuildStatusSuccess(story.j.waitForCompletion(b)));
+-                story.j.assertLogContains("in install", b);
+-                story.j.assertLogContains("Travis Before Install", b);
+-                story.j.assertLogContains("Travis Install", b);
+-                story.j.assertLogContains("Travis Before Script", b);
+-                story.j.assertLogContains("Travis Script", b);
+-                story.j.assertLogContains("Travis After Script", b);
+-            }
+-        });
+-    }
+-
+-    @Test public void afterFailure() throws Exception {
+-        sampleRepo.init();
+-        sampleRepo.write(".travis.yml",
+-                "script: exit 1\n" +
+-                        "after_failure: echo 'in after_failure'\n" +
+-                        "after_success: echo 'in after_success'\n");
+-        sampleRepo.write("Jenkinsfile", "simpleTravisRunner('.travis.yml')");
+-        sampleRepo.git("add", "Jenkinsfile");
+-        sampleRepo.git("add", ".travis.yml");
+-        sampleRepo.git("commit", "--message=files");
+-        story.addStep(new Statement() {
+-            @Override public void evaluate() throws Throwable {
+-                WorkflowJob p = story.j.jenkins.createProject(WorkflowJob.class, "p");
+-                p.setDefinition(new CpsScmFlowDefinition(new GitStep(sampleRepo.toString()).createSCM(), "Jenkinsfile"));
+-                WorkflowRun b = p.scheduleBuild2(0).waitForStart();
+-                story.j.assertLogNotContains("Travis Install",
+-                        story.j.assertBuildStatus(Result.FAILURE, story.j.waitForCompletion(b)));
+-                story.j.assertLogContains("Travis Script", b);
+-                story.j.assertLogContains("Travis After Failure", b);
+-                story.j.assertLogNotContains("Travis After Success", b);
+-
+-            }
+-        });
+-    }
+-
+-    @Test public void afterSuccess() throws Exception {
+-        sampleRepo.init();
+-        sampleRepo.write(".travis.yml",
+-                "script: exit 0\n" +
+-                        "after_failure: echo 'in after_failure'\n" +
+-                        "after_success: echo 'in after_success'\n");
+-        sampleRepo.write("Jenkinsfile", "simpleTravisRunner('.travis.yml')");
+-        sampleRepo.git("add", "Jenkinsfile");
+-        sampleRepo.git("add", ".travis.yml");
+-        sampleRepo.git("commit", "--message=files");
+-        story.addStep(new Statement() {
+-            @Override public void evaluate() throws Throwable {
+-                WorkflowJob p = story.j.jenkins.createProject(WorkflowJob.class, "p");
+-                p.setDefinition(new CpsScmFlowDefinition(new GitStep(sampleRepo.toString()).createSCM(), "Jenkinsfile"));
+-                WorkflowRun b = p.scheduleBuild2(0).waitForStart();
+-                story.j.assertLogNotContains("Travis Install",
+-                        story.j.assertBuildStatusSuccess(story.j.waitForCompletion(b)));
+-                story.j.assertLogContains("Travis Script", b);
+-                story.j.assertLogContains("Travis After Success", b);
+-                story.j.assertLogNotContains("Travis After Failure", b);
+-
+-            }
+-        });
+-    }
+-
+-    @Test public void timeoutStep() throws Exception {
+-        sampleRepo.init();
+-        sampleRepo.write("somefile", "");
+-        sampleRepo.write(".travis.yml",
+-                "script: sleep 75");
+-        sampleRepo.write("Jenkinsfile", "simpleTravisRunner('.travis.yml', null, 1)");
+-        sampleRepo.git("add", "Jenkinsfile");
+-        sampleRepo.git("add", "somefile", ".travis.yml");
+-        sampleRepo.git("commit", "--message=files");
+-        story.addStep(new Statement() {
+-            @Override public void evaluate() throws Throwable {
+-                WorkflowJob p = story.j.jenkins.createProject(WorkflowJob.class, "p");
+-                p.setDefinition(new CpsScmFlowDefinition(new GitStep(sampleRepo.toString()).createSCM(), "Jenkinsfile"));
+-                WorkflowRun b = p.scheduleBuild2(0).waitForStart();
+-                story.j.assertLogNotContains("Travis Install",
+-                        story.j.assertBuildStatus(Result.FAILURE, story.j.waitForCompletion(b)));
+-                story.j.assertLogContains("Travis Script", b);
+-                story.j.assertLogContains("Enforce time limit : Start", b);
+-                story.j.assertLogContains("Enforce time limit : End", b);
+-                story.j.assertLogContains("Sending interrupt signal to process", b);
+-            }
+-        });
+-    }
+-
+-    // TODO: Env Matrix testing!
+-
+-
+-    // TODO: Figure out what to do about testing this on non-Unix platforms. The step won't work on Windows by design,
+-    // but how do we run these tests without failure there? Or do we bother worrying about it?
+-}

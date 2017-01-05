@@ -13,6 +13,12 @@
 # permissions and limitations under the License.
 
 ---
+- name: Install maven
+  sudo: yes
+  package: >
+    name=maven
+    state=latest
+
 - name: Create jenkins directory
   file: >
     path=/var/powerci/jenkins
@@ -35,9 +41,9 @@
 
 - name: Copy Jenkins files to context
   copy: >
+    remote_src=True
     src=/var/powerci/jenkins/repo/{{ item.name }}
     dest=/var/powerci/jenkins/{{ item.name }}
-    remote_src=True
     owner={{ ansible_user }}
     group={{ ansible_user }}
     mode={{ item.mode }}
@@ -46,6 +52,17 @@
     - {name: 'plugins.sh',  mode: '0755'}
     - {name: 'jenkins.sh',  mode: '0755'}
     - {name: 'init.groovy', mode: '0644'}
+
+- name: Capture dockerfile patches
+  local_action: shell ls -la ./roles/jenkins/files/ppc64le-jenkins-patches | tail -n +4 | awk '{print "- "$9" "}'
+  register: dockerfile_patches
+  changed_when: False
+
+- name: Patch Dockerfile
+  patch: >
+    src=ppc64le-jenkins-patches/{{ item }}
+    dest=/var/powerci/jenkins/Dockerfile
+  with_items: "{{ dockerfile_patches.stdout|from_yaml|sort }}"
 
 - name: Copy jenkins plugins
   copy: >
@@ -70,25 +87,82 @@
     - job-dsl
     - docker
     - gearman
+    - http-request
   register: removed_plugins
 
-- name: Copy gearman-plugin.hpi
-  copy: >
-    src=gearman-plugin.hpi
-    dest=/var/powerci/jenkins/gearman-plugin.hpi
-    owner={{ ansible_user }}
-    group={{ ansible_user }}
-    mode=0664
-  register: gearman
+- name: Check for Gearman Plugin
+  stat: path=/var/powerci/jenkins/gearman-plugin
+  register: gearmanpluginstat
 
-- name: Copy simple-travis-runner.hpi
+- name: Checkout Gearman Plugin
+  git: >
+    repo=https://github.com/openstack-infra/gearman-plugin.git
+    dest=/var/powerci/jenkins/gearman-plugin
+    version=46d74f029f19067446ae386e8a6ed47fb627d867
+    force=True
+  when: not gearmanpluginstat.stat.exists
+
+- name: Capture gearman patches
+  local_action: shell ls -la ./roles/jenkins/files/gearman-patches | tail -n +4 | awk '{print "- "$9" "}'
+  register: gearman_patches
+  changed_when: False
+
+- name: Patch Gearman Plugin
+  patch: >
+    src=gearman-patches/{{ item }}
+    basedir=/var/powerci/jenkins/gearman-plugin
+    strip=1
+  register: gearman_patch
+  with_items: "{{ gearman_patches.stdout|from_yaml|sort }}"
+
+- name: Package Gearman Plugin
+  shell: cd /var/powerci/jenkins/gearman-plugin; mvn package
+  register: gearman_package
+  when: gearman_patch|changed
+
+- name: Copy Gearman Plugin
   copy: >
-    src=simple-travis-runner.hpi
-    dest=/var/powerci/jenkins/simple-travis-runner.hpi
-    owner={{ ansible_user }}
-    group={{ ansible_user }}
+    remote_src=True
+    src=/var/powerci/jenkins/gearman-plugin/target/gearman-plugin.hpi
+    dest=/var/powerci/jenkins/gearman-plugin.hpi
     mode=0664
-  register: simpletravisrunner
+
+- name: Check for Simple Travis Runner Plugin
+  stat: path=/var/powerci/jenkins/simple-travis-runner-plugin
+  register: strpluginstat
+
+- name: Checkout Simple Travis Runner Plugin
+  git: >
+    repo=https://github.com/abayer/simple-travis-runner-plugin.git
+    dest=/var/powerci/jenkins/simple-travis-runner-plugin
+    version=97daccee0ad41a470559bddf60e54cf2a245ab89
+    force=True
+  when: not strpluginstat.stat.exists
+
+- name: Capture simple travis runner patches
+  local_action: shell ls -la ./roles/jenkins/files/str-patches | tail -n +4 | awk '{print "- "$9" "}'
+  register: str_patches
+  changed_when: False
+
+- name: Patch Simple Travis Runner
+  patch: >
+    src=str-patches/{{ item }}
+    basedir=/var/powerci/jenkins/simple-travis-runner-plugin
+    strip=1
+  register: str_patch
+  with_items: "{{ str_patches.stdout|from_yaml|sort }}"
+
+- name: Package Simple Travis Runner
+  shell: cd /var/powerci/jenkins/simple-travis-runner-plugin; mvn package
+  register: str_package
+  when: str_patch|changed
+
+- name: Copy Simple Travis Runner
+  copy: >
+    remote_src=True
+    src=/var/powerci/jenkins/simple-travis-runner-plugin/target/simple-travis-runner.hpi
+    dest=/var/powerci/jenkins/simple-travis-runner.hpi
+    mode=0664
 
 - name: Generate jenkins-plugins.txt
   shell: cat /var/powerci/jenkins/*-plugin.txt | sort -u | grep -v \# > /var/powerci/jenkins/jenkins-plugins.txt && chown 1000:1000 /var/powerci/jenkins/jenkins-plugins.txt
@@ -149,11 +223,6 @@
     group={{ ansible_user }}
   register: slave
 
-- name: Patch Dockerfile
-  patch: >
-    src=Dockerfile.patch
-    dest=/var/powerci/jenkins/Dockerfile
-
 - name: Render docker-compose template
   template: >
     src=docker-compose.yml.j2
@@ -204,8 +273,9 @@
   sudo: yes
   shell: ls -la /var/lib/docker/volumes/jenkins_jenkins_home/_data/ | tail -n +4 | awk '{print "- "$9" "}' | grep -v jobs
   register: files
-  when: slave|changed or gearmand|changed or ldap|changed or plugins|changed or removed_plugins|changed or credentials|changed or gearman|changed or simpletravisrunner|changed
+  when: slave|changed or gearmand|changed or ldap|changed or plugins|changed or removed_plugins|changed or credentials|changed or gearman_package|changed or str_package|changed
   ignore_errors: true
+  changed_when: False
 
 - name: Remove files
   sudo: yes
@@ -213,7 +283,7 @@
     path=/var/lib/docker/volumes/jenkins_jenkins_home/_data/{{ item }}
     state=absent
   with_items: "{{ files.stdout|from_yaml }}"
-  when: files|success and (slave|changed or gearmand|changed or ldap|changed or plugins|changed or removed_plugins|changed or credentials|changed or gearman|changed or simpletravisrunner|changed)
+  when: (not files|skipped) and (slave|changed or gearmand|changed or ldap|changed or plugins|changed or removed_plugins|changed or credentials|changed or gearman_package|changed or str_package|changed)
 
 - name: Build jenkins image
   docker_service:

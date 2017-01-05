@@ -1,0 +1,101 @@
+1c1,2
+< FROM java:8u45-jdk
+---
+> FROM ppc64le/java
+> MAINTAINER Davi Diorio Mendes <ddiorio@br.ibm.com>
+3c4,6
+< RUN apt-get update && apt-get install -y wget git curl zip && rm -rf /var/lib/apt/lists/*
+---
+> USER root
+> 
+> RUN apt-get update && apt-get install -y git curl zip ldap-utils expect && rm -rf /var/lib/apt/lists/*
+5a9
+> ENV JENKINS_SLAVE_AGENT_PORT 50000
+7,10c11,20
+< # Jenkins is ran with user `jenkins`, uid = 1000
+< # If you bind mount a volume from host/vloume from a data container, 
+< # ensure you use same uid
+< RUN useradd -d "$JENKINS_HOME" -u 1000 -m -s /bin/bash jenkins
+---
+> ARG user=jenkins
+> ARG group=jenkins
+> ARG uid=1000
+> ARG gid=1000
+> 
+> # Jenkins is run with user `jenkins`, uid = 1000
+> # If you bind mount a volume from the host or a data container,
+> # ensure you use the same uid
+> RUN groupadd -g ${gid} ${group} \
+>     && useradd -d "$JENKINS_HOME" -u ${uid} -g ${gid} -m -s /bin/bash ${user}
+12c22
+< # Jenkins home directoy is a volume, so configuration and build history 
+---
+> # Jenkins home directory is a volume, so configuration and build history
+16,17c26,27
+< # `/usr/share/jenkins/ref/` contains all reference configuration we want 
+< # to set on a fresh new installation. Use it to bundle additional plugins 
+---
+> # `/usr/share/jenkins/ref/` contains all reference configuration we want
+> # to set on a fresh new installation. Use it to bundle additional plugins
+21d30
+< 
+24,25c33,36
+< ENV JENKINS_VERSION 1.617
+< ENV JENKINS_SHA ae33eb0c0c6ae2317812e11e76e31452a1ce0b62
+---
+> ARG JENKINS_VERSION
+> ENV JENKINS_VERSION ${JENKINS_VERSION:-1.651.2}
+> ARG JENKINS_SHA
+> ENV JENKINS_SHA ${JENKINS_SHA:-f61b8b604acba5076a93dcde28c0be2561d17bde}
+27c38
+< # could use ADD but this one does not check Last-Modified header 
+---
+> # could use ADD but this one does not check Last-Modified header
+29,30c40,41
+< RUN curl -fL http://mirrors.jenkins-ci.org/war/$JENKINS_VERSION/jenkins.war -o /usr/share/jenkins/jenkins.war \
+<   && echo "$JENKINS_SHA /usr/share/jenkins/jenkins.war" | sha1sum -c -
+---
+> RUN curl -fsSL http://repo.jenkins-ci.org/public/org/jenkins-ci/main/jenkins-war/${JENKINS_VERSION}/jenkins-war-${JENKINS_VERSION}.war -o /usr/share/jenkins/jenkins.war \
+>   && echo "$JENKINS_SHA  /usr/share/jenkins/jenkins.war" | sha1sum -c -
+32,34c43,45
+< ENV JENKINS_UC https://updates.jenkins-ci.org
+< ENV JENKINS_UC_DOWNLOAD $JENKINS_UC/download
+< RUN chown -R jenkins "$JENKINS_HOME" /usr/share/jenkins/ref
+---
+> ENV JENKINS_UC https://updates.jenkins.io
+> ENV JENKINS_UC_DOWNLOAD ${JENKINS_UC}/download
+> RUN chown -R ${user} "$JENKINS_HOME" /usr/share/jenkins/ref
+42c53
+< ENV COPY_REFERENCE_FILE_LOG /var/log/copy_reference_file.log
+---
+> ENV COPY_REFERENCE_FILE_LOG $JENKINS_HOME/copy_reference_file.log
+44a56,72
+> RUN mkdir -p /var/log/jenkins /var/ssh \
+>     && chown -R jenkins:jenkins /var/log/jenkins \
+>     && chown -R jenkins:jenkins /var/ssh
+> 
+> ADD id_rsa /var/ssh/id_rsa
+> 
+> RUN chown jenkins:jenkins /var/ssh/id_rsa
+> 
+> ADD ca-chain.cert.pem $JAVA_HOME/jre/lib/security/
+> RUN keytool \
+>         -noprompt \
+>         -import \
+>         -trustcacerts \
+>         -storepass changeit \
+>         -keystore $JAVA_HOME/jre/lib/security/cacerts \
+>         -file $JAVA_HOME/jre/lib/security/ca-chain.cert.pem
+> 
+50d77
+< # from a derived Dockerfile, can use `RUN plugin.sh active.txt` to setup /usr/share/jenkins/ref/plugins from a support bundle
+51a79,87
+> COPY jenkins-plugins.txt /usr/share/jenkins/ref/jenkins-plugins.txt
+> RUN /usr/local/bin/plugins.sh /usr/share/jenkins/ref/jenkins-plugins.txt
+> COPY gearman-plugin.hpi /usr/share/jenkins/ref/plugins/gearman-plugin.jpi
+> COPY simple-travis-runner.hpi /usr/share/jenkins/ref/plugins/simple-travis-runner.jpi
+> 
+> COPY configure_*.groovy /usr/share/jenkins/ref/init.groovy.d/
+> 
+> # Set JENKINS_OPTS env variable
+> ENV JENKINS_OPTS="--logfile=/var/log/jenkins/jenkins.log"
