@@ -15,6 +15,9 @@
 FROM ppc64le/debian:jessie
 MAINTAINER Davi Diorio Mendes <ddiorio@br.ibm.com>
 
+# Link sh to bash
+RUN ln -sf bash /bin/sh
+
 RUN echo "deb http://ftp.de.debian.org/debian jessie-backports main" >> /etc/apt/sources.list
 RUN apt-get -q update &&\
     DEBIAN_FRONTEND="noninteractive" apt-get -q upgrade -y -o Dpkg::Options::="--force-confnew" --no-install-recommends &&\
@@ -25,12 +28,14 @@ RUN apt-get -q update &&\
     python-dev \
     openssh-server \
     sudo \
+    curl \
     openjdk-8-jdk &&\
     apt-get -q autoremove &&\
     apt-get -q clean -y
 
-# Link sh to bash
-RUN ln -sf bash /bin/sh
+# Install gimme: https://github.com/travis-ci/gimme
+RUN curl -sL -o /usr/bin/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme \
+    && chmod +x /usr/bin/gimme
 
 # Install pip
 ADD https://bootstrap.pypa.io/get-pip.py /tmp/get-pip.py

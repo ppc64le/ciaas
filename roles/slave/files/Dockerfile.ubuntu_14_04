@@ -17,6 +17,9 @@ MAINTAINER Davi Diorio Mendes <ddiorio@br.ibm.com>
 
 ENV DEBIAN_FRONTEND noninteractive
 
+# Link sh to bash
+RUN ln -sf bash /bin/sh
+
 # Add docker apt repo
 RUN echo "deb http://ftp.unicamp.br/pub/ppc64el/ubuntu/14_04/docker-ppc64el/ trusty main" \
     > /etc/apt/sources.list.d/trusty-docker.list && \
@@ -41,8 +44,9 @@ RUN apt-get -q update &&\
     apt-get -q autoremove &&\
     apt-get -q clean -y
 
-# Link sh to bash
-RUN ln -sf bash /bin/sh
+# Install gimme: https://github.com/travis-ci/gimme
+RUN curl -sL -o /usr/bin/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme \
+    && chmod +x /usr/bin/gimme
 
 # Install pip
 ADD https://bootstrap.pypa.io/get-pip.py /tmp/get-pip.py
