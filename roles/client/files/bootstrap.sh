@@ -22,7 +22,7 @@ uwsgi --chdir /home/client/backend \
       --master --pidfile /tmp/project-master.pid \
       --socket /home/client/backend/client.sock \
       --processes 5 \
-      --harakiri 20 \
+      --harakiri 120 \
       --max-requests 5000 \
       --vacuum \
       --thunder-lock \
