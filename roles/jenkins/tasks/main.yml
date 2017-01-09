@@ -48,7 +48,6 @@
     group={{ ansible_user }}
     mode={{ item.mode }}
   with_items:
-    - {name: 'Dockerfile',  mode: '0644'}
     - {name: 'plugins.sh',  mode: '0755'}
     - {name: 'jenkins.sh',  mode: '0755'}
     - {name: 'init.groovy', mode: '0644'}
@@ -63,6 +62,26 @@
     src=ppc64le-jenkins-patches/{{ item }}
     dest=/var/powerci/jenkins/Dockerfile
   with_items: "{{ dockerfile_patches.stdout|from_yaml|sort }}"
+  register: jenkins_patch
+  ignore_errors: True
+
+- block:
+    - name: Copy Jenkins files to context
+      copy: >
+        remote_src=True
+        src=/var/powerci/jenkins/repo/Dockerfile
+        dest=/var/powerci/jenkins/Dockerfile
+        owner={{ ansible_user }}
+        group={{ ansible_user }}
+        mode=0644
+
+    - name: Patch Dockerfile
+      patch: >
+        src=ppc64le-jenkins-patches/{{ item }}
+        dest=/var/powerci/jenkins/Dockerfile
+      with_items: "{{ dockerfile_patches.stdout|from_yaml|sort }}"
+  when: jenkins_patch|failed
+
 
 - name: Copy jenkins plugins
   copy: >
