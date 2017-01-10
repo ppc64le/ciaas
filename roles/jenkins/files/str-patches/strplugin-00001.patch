@@ -1,7 +1,6 @@
-diff --git a/pom.xml b/pom.xml
-index 03e8ec6..b099626 100644
---- a/pom.xml
-+++ b/pom.xml
+diff -ruN -x '.git*' -x 'target*' original-str-plugin/pom.xml simple-travis-runner-plugin/pom.xml
+--- original-str-plugin/pom.xml	2017-01-10 16:18:31.646019312 -0200
++++ simple-travis-runner-plugin/pom.xml	2016-11-29 10:20:28.343501504 -0200
 @@ -87,7 +87,7 @@
              <version>${workflow.version}</version>
          </dependency>
@@ -19,10 +18,32 @@ index 03e8ec6..b099626 100644
 +        </dependency> -->
      </dependencies>
  </project>
-diff --git a/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy b/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy
-index b9ded4f..45db103 100644
---- a/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy
-+++ b/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy
+diff -ruN -x '.git*' -x 'target*' original-str-plugin/pom.xml.rej simple-travis-runner-plugin/pom.xml.rej
+--- original-str-plugin/pom.xml.rej	1969-12-31 21:00:00.000000000 -0300
++++ simple-travis-runner-plugin/pom.xml.rej	2017-01-10 15:10:26.364715096 -0200
+@@ -0,0 +1,19 @@
++--- pom.xml
+++++ pom.xml
++@@ -87,7 +87,7 @@
++             <version>${workflow.version}</version>
++         </dependency>
++ 
++-        <!-- Test dependencies -->
+++        <!-- Test dependencies
++         <dependency>
++             <groupId>org.jenkins-ci.plugins</groupId>
++             <artifactId>git</artifactId>
++@@ -113,6 +113,6 @@
++             <version>${workflow.version}</version>
++             <classifier>tests</classifier>
++             <scope>test</scope>
++-        </dependency>
+++        </dependency> -->
++     </dependencies>
++ </project>
+diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy simple-travis-runner-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy
+--- original-str-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-01-10 16:18:31.646019312 -0200
++++ simple-travis-runner-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-01-10 15:25:14.313383071 -0200
 @@ -24,14 +24,30 @@
  package org.jenkinsci.plugins.simpletravisrunner
  
@@ -54,7 +75,7 @@ index b9ded4f..45db103 100644
      }
  
      /**
-@@ -43,54 +59,84 @@ class SimpleTravisRunner implements Serializable {
+@@ -43,54 +59,84 @@
       *                    just run on 'node { }'.
       * @param timeout Optional timeout, in minutes, for individual steps - defaults to 50 minutes, like travis-ci.org.
       */
@@ -78,10 +99,10 @@ index b9ded4f..45db103 100644
 +            travisSteps = readAndConvertTravis(travisFile)
 +
 +            label = null
-+            if (labelExpr != null) {
-+                label = labelExpr
-+            } else if (travisSteps.containsKey("dist")) {
++            if (travisSteps.containsKey("dist")) {
 +                label = travisSteps.get("dist").toString()
++            } else {
++                label = labelExpr
 +            }
  
 -                    def envCombos
@@ -172,7 +193,7 @@ index b9ded4f..45db103 100644
              if (travisSteps.containsKey("before_install")) {
                  if (!inParallel)
                      script.stage "Travis Before Install"
-@@ -169,6 +215,66 @@ class SimpleTravisRunner implements Serializable {
+@@ -169,6 +215,66 @@
          }
      }
  
@@ -239,17 +260,17 @@ index b9ded4f..45db103 100644
      /**
       * Takes a Travis "step", which could either be a String or an ArrayList of Strings, and returns an array of
       * Pipeline "sh" steps inside a closure to execute those "steps".
-@@ -217,33 +323,37 @@ class SimpleTravisRunner implements Serializable {
+@@ -217,33 +323,36 @@
       * @param travisEnv
       * @return a map of environment keys to lists of values for the key
       */
 -    private def generateEnvAxes(travisEnv) {
 -        def rawEnvEntries = getYamlStringOrListAsList(travisEnv)
+-
+-        def envEntries = [:]
 +    private def generateEnvMatrix(travisEnv, envMatrix) {
 +        def rawEnvEntries = null
  
--        def envEntries = [:]
--
 -        for (def entryString in rawEnvEntries.toSet()) {
 -            if (entryString instanceof String) {
 +        if (travisEnv instanceof Map) {
@@ -285,7 +306,7 @@ index b9ded4f..45db103 100644
 -        return envEntries
      }
  
- 
+-
 -    private def generateEnvCombinations(travisEnv) {
 -        Map<String,List<Object>> axes = generateEnvAxes(travisEnv)
 -
@@ -293,7 +314,7 @@ index b9ded4f..45db103 100644
          List<List<Object>> valueCombos = axes.values().toList().combinations()
  
          def keyList = axes.keySet().toList()
-@@ -298,4 +408,237 @@ class SimpleTravisRunner implements Serializable {
+@@ -298,4 +407,250 @@
  
          return travisYaml
      }
@@ -351,13 +372,26 @@ index b9ded4f..45db103 100644
 +        private void goVersions(CpsScript script, TravisEnvMatrix envMatrix, List<String> goversions) {
 +            String os = "linux"
 +            String arch = "ppc64le"
++
++            ArrayList<String> devVersions = ['master', 'tip']
 +            SortedSet<String> availableVersions = getAvailableVersions(os, arch)
 +            ArrayList<String> versions = new ArrayList<String>()
++
 +            envMatrix.put("GOOS", "")
 +            envMatrix.put("GOARCH", "")
 +
 +            for (String version : goversions) {
 +                def ver = availableVersions.ceiling(version.toString())
++
++                if (ver == null) {
++                    if (devVersions.contains(version)) {
++                        ver = availableVersions.last()
++                        script.echo("Using go version " + ver + " for " + version)
++                    } else {
++                        script.echo("Cannot find suitable go version for " + version)
++                    }
++                }
++
 +                if (!versions.contains(ver)) {
 +                    versions.add(ver)
 +                }
@@ -531,11 +565,50 @@ index b9ded4f..45db103 100644
 +
 +    }
  }
-diff --git a/src/test/java/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunnerDSLTest.java b/src/test/java/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunnerDSLTest.java
-deleted file mode 100644
-index 06dfedb..0000000
---- a/src/test/java/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunnerDSLTest.java
-+++ /dev/null
+diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy.rej simple-travis-runner-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy.rej
+--- original-str-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy.rej	1969-12-31 21:00:00.000000000 -0300
++++ simple-travis-runner-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy.rej	2017-01-10 15:10:52.596618978 -0200
+@@ -0,0 +1,37 @@
++--- src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-01-09 17:21:21.794694048 -0200
+++++ src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-01-10 14:27:30.830754412 -0200
++@@ -352,7 +352,6 @@
++         }
++     }
++ 
++-
++     private def generateEnvCombinations(axes) {
++         List<List<Object>> valueCombos = axes.values().toList().combinations()
++ 
++@@ -462,13 +461,26 @@
++         private void goVersions(CpsScript script, TravisEnvMatrix envMatrix, List<String> goversions) {
++             String os = "linux"
++             String arch = "ppc64le"
+++
+++            ArrayList<String> devVersions = ['master', 'tip']
++             SortedSet<String> availableVersions = getAvailableVersions(os, arch)
++             ArrayList<String> versions = new ArrayList<String>()
+++
++             envMatrix.put("GOOS", "")
++             envMatrix.put("GOARCH", "")
++ 
++             for (String version : goversions) {
++                 def ver = availableVersions.ceiling(version.toString())
+++
+++                if (ver == null) {
+++                    if (devVersions.contains(version)) {
+++                        ver = availableVersions.last()
+++                        script.echo("Using go version " + ver + " for " + version)
+++                    } else {
+++                        script.echo("Cannot find suitable go version for " + version)
+++                    }
+++                }
+++
++                 if (!versions.contains(ver)) {
++                     versions.add(ver)
++                 }
+diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/test/java/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunnerDSLTest.java simple-travis-runner-plugin/src/test/java/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunnerDSLTest.java
+--- original-str-plugin/src/test/java/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunnerDSLTest.java	2017-01-10 16:18:31.647019308 -0200
++++ simple-travis-runner-plugin/src/test/java/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunnerDSLTest.java	1969-12-31 21:00:00.000000000 -0300
 @@ -1,381 +0,0 @@
 -/*
 - * The MIT License

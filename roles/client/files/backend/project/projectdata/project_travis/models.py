@@ -28,7 +28,7 @@ class ProjectTravisModel(pmodels.Data):
 
     def getData(self):
         """Get project travis data representation."""
-        script = ("simpleTravisRunner('.travis.yml', null, 50, " +
+        script = ("simpleTravisRunner('.travis.yml', '!master', 50, " +
                   "[branch: '%(branch)s', url: '%(url)s'])"
                   % {'branch': self.branch, 'url': self.url})
 
