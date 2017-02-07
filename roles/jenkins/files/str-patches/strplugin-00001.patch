@@ -1,5 +1,5 @@
 diff -ruN -x '.git*' -x 'target*' original-str-plugin/pom.xml simple-travis-runner-plugin/pom.xml
---- original-str-plugin/pom.xml	2017-01-10 16:18:31.646019312 -0200
+--- original-str-plugin/pom.xml	2017-01-10 17:46:19.614245840 -0200
 +++ simple-travis-runner-plugin/pom.xml	2016-11-29 10:20:28.343501504 -0200
 @@ -87,7 +87,7 @@
              <version>${workflow.version}</version>
@@ -18,32 +18,9 @@ diff -ruN -x '.git*' -x 'target*' original-str-plugin/pom.xml simple-travis-runn
 +        </dependency> -->
      </dependencies>
  </project>
-diff -ruN -x '.git*' -x 'target*' original-str-plugin/pom.xml.rej simple-travis-runner-plugin/pom.xml.rej
---- original-str-plugin/pom.xml.rej	1969-12-31 21:00:00.000000000 -0300
-+++ simple-travis-runner-plugin/pom.xml.rej	2017-01-10 15:10:26.364715096 -0200
-@@ -0,0 +1,19 @@
-+--- pom.xml
-++++ pom.xml
-+@@ -87,7 +87,7 @@
-+             <version>${workflow.version}</version>
-+         </dependency>
-+ 
-+-        <!-- Test dependencies -->
-++        <!-- Test dependencies
-+         <dependency>
-+             <groupId>org.jenkins-ci.plugins</groupId>
-+             <artifactId>git</artifactId>
-+@@ -113,6 +113,6 @@
-+             <version>${workflow.version}</version>
-+             <classifier>tests</classifier>
-+             <scope>test</scope>
-+-        </dependency>
-++        </dependency> -->
-+     </dependencies>
-+ </project>
 diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy simple-travis-runner-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy
---- original-str-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-01-10 16:18:31.646019312 -0200
-+++ simple-travis-runner-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-01-10 15:25:14.313383071 -0200
+--- original-str-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-01-10 17:46:19.614245840 -0200
++++ simple-travis-runner-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-01-10 17:44:41.513652322 -0200
 @@ -24,14 +24,30 @@
  package org.jenkinsci.plugins.simpletravisrunner
  
@@ -565,49 +542,8 @@ diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jen
 +
 +    }
  }
-diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy.rej simple-travis-runner-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy.rej
---- original-str-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy.rej	1969-12-31 21:00:00.000000000 -0300
-+++ simple-travis-runner-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy.rej	2017-01-10 15:10:52.596618978 -0200
-@@ -0,0 +1,37 @@
-+--- src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-01-09 17:21:21.794694048 -0200
-++++ src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-01-10 14:27:30.830754412 -0200
-+@@ -352,7 +352,6 @@
-+         }
-+     }
-+ 
-+-
-+     private def generateEnvCombinations(axes) {
-+         List<List<Object>> valueCombos = axes.values().toList().combinations()
-+ 
-+@@ -462,13 +461,26 @@
-+         private void goVersions(CpsScript script, TravisEnvMatrix envMatrix, List<String> goversions) {
-+             String os = "linux"
-+             String arch = "ppc64le"
-++
-++            ArrayList<String> devVersions = ['master', 'tip']
-+             SortedSet<String> availableVersions = getAvailableVersions(os, arch)
-+             ArrayList<String> versions = new ArrayList<String>()
-++
-+             envMatrix.put("GOOS", "")
-+             envMatrix.put("GOARCH", "")
-+ 
-+             for (String version : goversions) {
-+                 def ver = availableVersions.ceiling(version.toString())
-++
-++                if (ver == null) {
-++                    if (devVersions.contains(version)) {
-++                        ver = availableVersions.last()
-++                        script.echo("Using go version " + ver + " for " + version)
-++                    } else {
-++                        script.echo("Cannot find suitable go version for " + version)
-++                    }
-++                }
-++
-+                 if (!versions.contains(ver)) {
-+                     versions.add(ver)
-+                 }
 diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/test/java/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunnerDSLTest.java simple-travis-runner-plugin/src/test/java/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunnerDSLTest.java
---- original-str-plugin/src/test/java/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunnerDSLTest.java	2017-01-10 16:18:31.647019308 -0200
+--- original-str-plugin/src/test/java/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunnerDSLTest.java	2017-01-10 17:46:19.615245835 -0200
 +++ simple-travis-runner-plugin/src/test/java/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunnerDSLTest.java	1969-12-31 21:00:00.000000000 -0300
 @@ -1,381 +0,0 @@
 -/*

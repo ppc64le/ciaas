@@ -28,5 +28,5 @@
 192.168.122.231 ansible_user=ubuntu client_port=8000
 
 [slave]
-192.168.122.203 ansible_connection=local debian_ports='[22000]' ubuntu_xenial_ports='[22001,22002]'
-192.168.122.231 ansible_user=ubuntu debian_ports='[22000]' ubuntu_trusty_ports='[22001,22002]'
+192.168.122.203 ansible_connection=local ubuntu_xenial_ports='[22001,22002]'
+192.168.122.231 ansible_user=ubuntu ubuntu_trusty_ports='[22001,22002]'

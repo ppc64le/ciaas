@@ -35,34 +35,34 @@
     owner={{ ansible_user }}
     mode=0644
 
-- name: debian_jessie - build image
-  docker_image: >
-    name={{ debian.img_name }}
-    path={{ debian.path }}
-    state=present
-    force=yes
+# - name: debian_jessie - build image
+#   docker_image: >
+#     name={{ debian.img_name }}
+#     path={{ debian.path }}
+#     state=present
+#     force=yes
 
-- name: debian_jessie - start container
-  docker_container:
-    name: "{{ debian.cont_prefix }}{{ item }}"
-    image: "{{ debian.img_name }}"
-    state: started
-    ports:
-      - "{{ debian.ports[ item|int ] }}:22"
-  with_sequence: start=0 count={{ debian.ports|length }}
+# - name: debian_jessie - start container
+#   docker_container:
+#     name: "{{ debian.cont_prefix }}{{ item }}"
+#     image: "{{ debian.img_name }}"
+#     state: started
+#     ports:
+#       - "{{ debian.ports[ item|int ] }}:22"
+#   with_sequence: start=0 count={{ debian.ports|length }}
 
-- name: debian_jessie - counting containers
-  shell: "docker ps -f name={{ debian.cont_prefix }}* | tail -n +2 | wc -l"
-  register: up_debians
+# - name: debian_jessie - counting containers
+#   shell: "docker ps -f name={{ debian.cont_prefix }}* | tail -n +2 | wc -l"
+#   register: up_debians
 
-- name: debian_jessie - remove exceding containers
-  docker_container:
-    name: "{{ debian.cont_prefix }}{{ item }}"
-    state: absent
-  with_sequence: >
-    start={{ debian.ports|length }}
-    count={{ (up_debians.stdout|int)-(debian.ports|length) }}
-  when: up_debians.stdout|int > debian.ports|length
+# - name: debian_jessie - remove exceding containers
+#   docker_container:
+#     name: "{{ debian.cont_prefix }}{{ item }}"
+#     state: absent
+#   with_sequence: >
+#     start={{ debian.ports|length }}
+#     count={{ (up_debians.stdout|int)-(debian.ports|length) }}
+#   when: up_debians.stdout|int > debian.ports|length
 
 ### UBUNTU TRUSTY ###
 

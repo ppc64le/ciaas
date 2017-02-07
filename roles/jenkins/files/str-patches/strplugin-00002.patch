@@ -1,0 +1,384 @@
+diff -ruN -x '.git*' -x 'target*' original-str-plugin/pom.xml.rej simple-travis-runner-plugin/pom.xml.rej
+--- original-str-plugin/pom.xml.rej	1969-12-31 21:00:00.000000000 -0300
++++ simple-travis-runner-plugin/pom.xml.rej	2017-02-03 14:47:56.101384621 -0200
+@@ -0,0 +1,19 @@
++--- pom.xml
+++++ pom.xml
++@@ -87,7 +87,7 @@
++             <version>${workflow.version}</version>
++         </dependency>
++ 
++-        <!-- Test dependencies -->
+++        <!-- Test dependencies
++         <dependency>
++             <groupId>org.jenkins-ci.plugins</groupId>
++             <artifactId>git</artifactId>
++@@ -113,6 +113,6 @@
++             <version>${workflow.version}</version>
++             <classifier>tests</classifier>
++             <scope>test</scope>
++-        </dependency>
+++        </dependency> -->
++     </dependencies>
++ </project>
+diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy simple-travis-runner-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy
+--- original-str-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-01-10 17:53:53.483365221 -0200
++++ simple-travis-runner-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-02-07 14:27:46.273620882 -0200
+@@ -40,12 +40,20 @@
+     private static final def languages = [
+         go: LanguageGoEnvironment,
+     ]
++    private static final def services = [
++        rabbitmq: ["service rabbitmq-server start",
++                   "service rabbitmq-server stop"],
++    ]
+ 
+-    private CpsScript script;
+     private final Map<String, Object> aptSourceWhitelist;
+ 
++    private CpsScript script;
++    private LanguageStrategy lang;
++    private List<String> cleanUp;
++
+     public SimpleTravisRunner(CpsScript script) {
+         this.script = script;
++        this.cleanUp = new ArrayList<String>()
+         def whitelistJson = new URL(aptSourceWhitelistURI).getText()
+         // this.aptSourceWhitelist = new JsonSlurper().parseText(whitelistJson)
+     }
+@@ -64,9 +72,20 @@
+         String label = null
+ 
+         script.node(labelExpr) {
+-            script.git scm
++            def thisScm
++            if (scm != null) {
++                script.checkout([$class: 'GitSCM',
++                                 branches: [[name: scm.branch]],
++                                 userRemoteConfigs: [[url: scm.url]]])
++                thisScm = scm
++            } else {
++                script.git script.scm
++                thisScm = script.scm
++            }
+             String travisFile = script.readFile(path)
+             travisSteps = readAndConvertTravis(travisFile)
++            travisSteps.put("scm", thisScm)
++
+ 
+             label = null
+             if (travisSteps.containsKey("dist")) {
+@@ -90,13 +109,38 @@
+ 
+             if (travisSteps.containsKey("language") &&
+                     languages.containsKey(travisSteps.get("language"))) {
+-                languages \
++                lang = languages \
+                     .get(travisSteps.get("language"))
+-                    .newInstance().call(script, travisSteps, envMatrix)
++                    .newInstance()
++                lang.call(script, travisSteps, envMatrix)
++            }
++
++            lang.decorateClosure({
++                script.sh("chmod +x -R ./")
++            })
++
++            if (travisSteps.containsKey("services")) {
++                def servicesList = getYamlStringOrListAsList(travisSteps.get("services"))
++                for (Object service : servicesList) {
++                    if (!services.containsKey(String.valueOf(service))) {
++                        continue
++                    }
++                    def action = services.get(service)
++                    script.timeout(time: 10, unit: 'MINUTES') {
++                        script.sh action[0]
++                    }
++                    cleanUp.add(action[1])
++                }
+             }
+ 
+             envCombos = envMatrix.combinations()
+             processSteps(travisSteps, envCombos, label, timeout)
++
++            for (String action : cleanUp) {
++                script.timeout(time: 10, unit: 'MINUTES') {
++                    script.sh action
++                }
++            }
+         }
+     }
+ 
+@@ -119,16 +163,16 @@
+             for (Map<String, String> env : envCombos) {
+                 script.echo("Running with env: " + env.toString())
+                 script.withEnv(env) {
+-                    executeSteps(travisSteps, false, timeout).call()
++                    executeScript(travisSteps, false, timeout).call()
+                 }
+             }
+ 
+         } else {
+-            executeSteps(travisSteps, false, timeout).call()
++            executeScript(travisSteps, false, timeout).call()
+         }
+     }
+ 
+-    private def executeSteps(travisSteps, boolean inParallel, Integer timeout) {
++    private def executeScript(travisSteps, boolean inParallel, Integer timeout) {
+         return {
+             // Fail fast on any errors in before_install, install or before_script
+             if (travisSteps.containsKey("addons")) {
+@@ -137,23 +181,9 @@
+                     addonsApt(addons.get("apt"), inParallel, timeout)
+                 }
+             }
+-            if (travisSteps.containsKey("before_install")) {
+-                if (!inParallel)
+-                    script.stage "Travis Before Install"
+-                getSteps(travisSteps.get("before_install"), timeout)
+-
+-            }
+-            if (travisSteps.containsKey("install")) {
+-                if (!inParallel)
+-                    script.stage "Travis Install"
+-                getSteps(travisSteps.get("install"), timeout)
+-
+-            }
+-            if (travisSteps.containsKey("before_script")) {
+-                if (!inParallel)
+-                    script.stage "Travis Before Script"
+-                getSteps(travisSteps.get("before_script"), timeout)
+-            }
++            executeStage(travisSteps, "before_install", inParallel, timeout)
++            executeStage(travisSteps, "install", inParallel, timeout)
++            executeStage(travisSteps, "before_script", inParallel, timeout)
+ 
+             // Note any failure in the script section but don't fail the build yet.
+             def failedScript = false
+@@ -161,11 +191,7 @@
+                 // TODO: Ideally we change this to note failures in script steps but continue through all of them
+                 // to completion anyway, as described in https://docs.travis-ci.com/user/customizing-the-build/#Customizing-the-Build-Step,
+                 // but I want to think about the implementation more.
+-                if (travisSteps.containsKey("script")) {
+-                    if (!inParallel)
+-                        script.stage "Travis Script"
+-                    getSteps(travisSteps.get("script"), timeout)
+-                }
++                executeStage(travisSteps, "script", inParallel, timeout)
+             } catch (Exception e) {
+                 script.echo("Error on script step: ${e}")
+                 failedScript = true
+@@ -186,24 +212,12 @@
+             try {
+                 // If the script failed, proceed to after_failure.
+                 if (failedScript) {
+-                    if (travisSteps.containsKey("after_failure")) {
+-                        if (!inParallel)
+-                            script.stage "Travis After Failure"
+-                        getSteps(travisSteps.get("after_failure"), timeout)
+-                    }
++                    executeStage(travisSteps, "after_failure", inParallel, timeout)
+                 } else {
+                     // Otherwise, check after_success.
+-                    if (travisSteps.containsKey("after_success")) {
+-                        if (!inParallel)
+-                            script.stage "Travis After Success"
+-                        getSteps(travisSteps.get("after_success"), timeout)
+-                    }
+-                }
+-                if (travisSteps.containsKey("after_script")) {
+-                    if (!inParallel)
+-                        script.stage "Travis After Script"
+-                    getSteps(travisSteps.get("after_script"), timeout)
++                    executeStage(travisSteps, "after_success", inParallel, timeout)
+                 }
++                executeStage(travisSteps, "after_script", inParallel, timeout)
+             } catch (Exception e) {
+                 script.echo("Error on after step(s), ignoring: ${e}")
+             }
+@@ -275,6 +289,16 @@
+         }
+     }
+ 
++    private def executeStage(Map<String, Object> travisSteps, String stage,
++                             boolean inParallel, Integer timeout) {
++        if (travisSteps.containsKey(stage)) {
++            if (!inParallel)
++                script.stage stage
++            lang.decorateClosure({
++                getSteps(travisSteps.get(stage), timeout)
++            })
++        }
++    }
+     /**
+      * Takes a Travis "step", which could either be a String or an ArrayList of Strings, and returns an array of
+      * Pipeline "sh" steps inside a closure to execute those "steps".
+@@ -408,13 +432,29 @@
+         return travisYaml
+     }
+ 
+-    private class LanguageGoEnvironment implements Serializable {
++    interface LanguageStrategy {
++
++        void call(CpsScript script, Map<String, Object> travisYml, TravisEnvMatrix envMatrix)
++        void decorateClosure(Closure action)
++
++    }
++
++    private class LanguageGoEnvironment implements LanguageStrategy, Serializable {
+         private static final String golangBinariesRepositoryURL = "https://storage.googleapis.com/golang/"
+         private static final String gimmeVersionsPrefix = "/var/gimme/versions"
+         private static final String gimmeEnvPrefix = "/var/gimme/envs"
+ 
+-        public void call(CpsScript script, Map<String, Object> travisYml, TravisEnvMatrix envMatrix) {
++        private CpsScript script
++        private String projPath
++        private String gopath
++
++        void call(CpsScript script, Map<String, Object> travisYml, TravisEnvMatrix envMatrix) {
+             // https://docs.travis-ci.com/user/languages/go/
++            this.script = script
++
++            // Set gopath
++            goPath(script, envMatrix, travisYml)
++
+             def goversions = []
+             if (travisYml.containsKey("go")) {
+                 goversions = (List<?>) travisYml.get("go")
+@@ -432,6 +472,39 @@
+             goVersions(script, envMatrix, goversions)
+         }
+ 
++        void decorateClosure(Closure action) {
++            script.dir(projPath) {
++                action.call()
++            }
++        }
++
++        private void goPath(CpsScript script, TravisEnvMatrix envMatrix,
++                            Map<String, Object> travisYml) {
++            gopath = "${script.env.WORKSPACE}/../gopath"
++            script.sh("mkdir -p " + gopath)
++            envMatrix.put("GOPATH", gopath)
++
++            String gobin = gopath + "/bin"
++            script.sh("mkdir -p " + gobin)
++            envMatrix.put("GOBIN", gobin)
++
++            URL scmURL = new URL(travisYml.get('scm').get('url'))
++            String host = scmURL.getHost()
++            String[] path = scmURL.getPath().split('/')
++            String user = path[1]
++            String repo = path[2].replaceFirst("\\.git", "")
++            String projParentPath = gopath + "/src/" + host + "/" + user
++            String projPath = projParentPath + "/" + repo
++
++            script.sh("mkdir -p " + projPath)
++            script.sh("rsync -az ${script.env.WORKSPACE}/* " + projPath)
++
++            // script.sh("mkdir -p " + projPath + "@tmp")
++            // script.sh("rsync -az ${script.env.WORKSPACE} " + projPath + "@tmp")
++
++            this.projPath = projPath
++        }
++
+         private void goInstall(CpsScript script, Map<String, Object> travisYml) {
+             if (!travisYml.containsKey("install")) {
+                 if (script.fileExists("makefile")
+@@ -493,7 +566,8 @@
+                 }
+ 
+                 String goRoot = "%s/go%s.%s.%s"
+-                String path = goRoot + "/bin:${script.env.PATH}"
++                String path = goRoot + "/bin:" \
++                              + gopath + "/bin:${script.env.PATH}"
+                 envMatrix.putRelated(
+                     ["TRAVIS_GO_VERSION", "GOROOT", "PATH"],
+                     [version,
+@@ -527,7 +601,7 @@
+ 
+         private CpsScript script
+ 
+-        public TravisEnvMatrix(Map<String, List<String>> defaults, CpsScript script) {
++        TravisEnvMatrix(Map<String, List<String>> defaults, CpsScript script) {
+             this.values = new LinkedHashMap<String, List<Object>>()
+             this.relationsMatrix = new LinkedHashMap<List<String>, List<List<String>>>()
+             this.relatedKeys = new ArrayList<String>()
+@@ -538,7 +612,7 @@
+             print values.toString()
+         }
+ 
+-        public List<Object> get(String key) {
++        List<Object> get(String key) {
+             return values.get(key)
+         }
+ 
+@@ -555,7 +629,7 @@
+             return previousValue
+         }
+ 
+-        public List<Object> put(String key, Object value) {
++        List<Object> put(String key, Object value) {
+             if (relatedKeys.contains(key)) {
+                 throw new IllegalArgumentException("Cannot add value to related key.")
+             }
+@@ -563,7 +637,7 @@
+             return uncheckedPut(key, value)
+         }
+ 
+-        public Map<String, List<Object>> putRelated(List<Object> keys, List<Object> values) {
++        Map<String, List<Object>> putRelated(List<Object> keys, List<Object> values) {
+             Map returnMap = [:]
+             List sortedValues = values.clone()
+             List sortedKeys = keys.clone()
+@@ -604,7 +678,7 @@
+             return returnMap
+         }
+ 
+-        public List<List<String>> combinations() {
++        List<List<String>> combinations() {
+             Map<String, List<Object>> data = values.clone()
+             Map thisRelKeys = [:]
+             String concatenedKeys = ""
+diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy.rej simple-travis-runner-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy.rej
+--- original-str-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy.rej	1969-12-31 21:00:00.000000000 -0300
++++ simple-travis-runner-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy.rej	2017-02-03 14:47:56.101384621 -0200
+@@ -0,0 +1,37 @@
++--- src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-01-09 17:21:21.794694048 -0200
+++++ src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-01-10 14:27:30.830754412 -0200
++@@ -352,7 +352,6 @@
++         }
++     }
++ 
++-
++     private def generateEnvCombinations(axes) {
++         List<List<Object>> valueCombos = axes.values().toList().combinations()
++ 
++@@ -462,13 +461,26 @@
++         private void goVersions(CpsScript script, TravisEnvMatrix envMatrix, List<String> goversions) {
++             String os = "linux"
++             String arch = "ppc64le"
+++
+++            ArrayList<String> devVersions = ['master', 'tip']
++             SortedSet<String> availableVersions = getAvailableVersions(os, arch)
++             ArrayList<String> versions = new ArrayList<String>()
+++
++             envMatrix.put("GOOS", "")
++             envMatrix.put("GOARCH", "")
++ 
++             for (String version : goversions) {
++                 def ver = availableVersions.ceiling(version.toString())
+++
+++                if (ver == null) {
+++                    if (devVersions.contains(version)) {
+++                        ver = availableVersions.last()
+++                        script.echo("Using go version " + ver + " for " + version)
+++                    } else {
+++                        script.echo("Cannot find suitable go version for " + version)
+++                    }
+++                }
+++
++                 if (!versions.contains(ver)) {
++                     versions.add(ver)
++                 }

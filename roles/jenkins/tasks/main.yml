@@ -150,13 +150,18 @@
   stat: path=/var/powerci/jenkins/simple-travis-runner-plugin
   register: strpluginstat
 
+- name: Remove old files
+  file: >
+    path=/var/powerci/jenkins/simple-travis-runner-plugin
+    state=absent
+  when: strpluginstat.stat.exists
+
 - name: Checkout Simple Travis Runner Plugin
   git: >
     repo=https://github.com/abayer/simple-travis-runner-plugin.git
     dest=/var/powerci/jenkins/simple-travis-runner-plugin
     version=97daccee0ad41a470559bddf60e54cf2a245ab89
     force=True
-  when: not strpluginstat.stat.exists
 
 - name: Capture simple travis runner patches
   local_action: shell ls -la ./roles/jenkins/files/str-patches | tail -n +4 | awk '{print "- "$9" "}'

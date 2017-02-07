@@ -40,7 +40,8 @@ RUN apt-get -q update &&\
         wget \
         openssl \
         rsync \
-        openjdk-7-jdk &&\
+        openjdk-7-jdk \
+        rabbitmq-server && \
     apt-get -q autoremove &&\
     apt-get -q clean -y
 

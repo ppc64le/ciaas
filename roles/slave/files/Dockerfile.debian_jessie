@@ -22,14 +22,20 @@ RUN echo "deb http://ftp.de.debian.org/debian jessie-backports main" >> /etc/apt
 RUN apt-get -q update &&\
     DEBIAN_FRONTEND="noninteractive" apt-get -q upgrade -y -o Dpkg::Options::="--force-confnew" --no-install-recommends &&\
     DEBIAN_FRONTEND="noninteractive" apt-get -q install -y -o Dpkg::Options::="--force-confnew"  --no-install-recommends \
-    build-essential \
-    git-core \
-    python \
-    python-dev \
-    openssh-server \
-    sudo \
-    curl \
-    openjdk-8-jdk &&\
+        build-essential \
+        git-core \
+        python \
+        python-dev \
+        openssh-server \
+        sudo \
+        curl \
+        rsync \
+        # ca-certificates-java=20160321 \
+        # openjdk-8-jdk-headless \
+        # openjdk-8-jre-headless \
+        # openjdk-8-jre \
+        openjdk-8-jdk \
+        rabbitmq-server && \
     apt-get -q autoremove &&\
     apt-get -q clean -y
 
