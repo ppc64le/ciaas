@@ -1,0 +1,16 @@
+34c34
+< ENV JENKINS_VERSION ${JENKINS_VERSION:-1.651.2}
+---
+> ENV JENKINS_VERSION ${JENKINS_VERSION:-2.32.2}
+36c36
+< ENV JENKINS_SHA ${JENKINS_SHA:-f61b8b604acba5076a93dcde28c0be2561d17bde}
+---
+> ENV JENKINS_SHA ${JENKINS_SHA:-f495a08733f69b1845fd2d9b3a46482adb6e6cee}
+40c40
+< RUN curl -fsSL http://repo.jenkins-ci.org/public/org/jenkins-ci/main/jenkins-war/${JENKINS_VERSION}/jenkins-war-${JENKINS_VERSION}.war -o /usr/share/jenkins/jenkins.war \
+---
+> RUN curl -fsSL https://repo.jenkins-ci.org/public/org/jenkins-ci/main/jenkins-war/${JENKINS_VERSION}/jenkins-war-${JENKINS_VERSION}.war -o /usr/share/jenkins/jenkins.war \
+87a88,90
+> ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false"
+> 
+> # vi: set ft=dockerfile:

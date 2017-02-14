@@ -17,6 +17,7 @@ workflow-step-api
 workflow-scm-step
 credentials
 display-url-api
+junit
 mailer
 scm-api
 git-client

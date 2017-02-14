@@ -39,6 +39,7 @@ ssh-credentials
 pipeline-input-step
 workflow-basic-steps
 display-url-api
+junit
 mailer
 workflow-multibranch
 cloudbees-folder
@@ -47,5 +48,6 @@ credentials
 workflow-durable-task-step
 durable-task
 pipeline-build-step
-workflow-aggregator
 pipeline-milestone-step
+
+workflow-aggregator:2.4

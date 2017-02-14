@@ -96,6 +96,9 @@
     - publish-over-ssh
     - simple-travis-runner
     - ssh-credentials
+    - maven
+    - ldap
+    - ssh-slaves
   register: plugins
 
 - name: Remove jenkins plugins

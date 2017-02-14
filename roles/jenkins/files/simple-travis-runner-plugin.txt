@@ -41,6 +41,7 @@ ssh-credentials
 pipeline-input-step
 workflow-basic-steps
 display-url-api
+junit
 mailer
 workflow-durable-task-step
 durable-task

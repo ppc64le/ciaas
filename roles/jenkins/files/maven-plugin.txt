@@ -12,8 +12,11 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
+javadoc
 junit
-script-security
 structs
-junit
-matrix-project
+mailer
+display-url-api
+token-macro
+
+maven-plugin
