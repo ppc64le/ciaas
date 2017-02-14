@@ -30,6 +30,8 @@ RUN echo "deb http://ftp.unicamp.br/pub/ppc64el/ubuntu/14_04/docker-ppc64el/ tru
 RUN apt-get -q update &&\
     DEBIAN_FRONTEND="noninteractive" apt-get -q upgrade -y -o Dpkg::Options::="--force-confnew" --no-install-recommends &&\
     DEBIAN_FRONTEND="noninteractive" apt-get -q install -y -o Dpkg::Options::="--force-confnew"  --no-install-recommends \
+        software-properties-common \
+        python-software-properties \
         build-essential \
         git-core \
         python \
@@ -41,6 +43,9 @@ RUN apt-get -q update &&\
         openssl \
         rsync \
         openjdk-7-jdk \
+        maven \
+        redis-server \
+        mongodb-server \
         rabbitmq-server && \
     apt-get -q autoremove &&\
     apt-get -q clean -y
