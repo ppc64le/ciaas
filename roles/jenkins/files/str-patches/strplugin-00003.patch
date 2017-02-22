@@ -1,0 +1,323 @@
+diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy simple-travis-runner-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy
+--- original-str-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-02-07 16:30:21.677406831 -0200
++++ simple-travis-runner-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-02-22 10:52:54.827448106 -0300
+@@ -40,12 +40,22 @@
+     private static final def languages = [
+         go: LanguageGoEnvironment,
+     ]
++
++    /*
++     * To support services, just add to this map the service name as the key
++     * and as the value an list with start command as fist item and cleanup
++     * command as second and last argument.
++     */
+     private static final def services = [
+         rabbitmq: ["service rabbitmq-server start",
+                    "service rabbitmq-server stop"],
++        "redis-server": ["service redis-server start",
++                         "service redis-server stop"],
++        mongodb: ["service mongodb start",
++                  "service mongodb stop"],  // PID file absent. Stop not working.
+     ]
+ 
+-    private final Map<String, Object> aptSourceWhitelist;
++    private final Map<String, String[]> aptSourceWhitelist;
+ 
+     private CpsScript script;
+     private LanguageStrategy lang;
+@@ -54,20 +64,35 @@
+     public SimpleTravisRunner(CpsScript script) {
+         this.script = script;
+         this.cleanUp = new ArrayList<String>()
+-        def whitelistJson = new URL(aptSourceWhitelistURI).getText()
+-        // this.aptSourceWhitelist = new JsonSlurper().parseText(whitelistJson)
++        this.aptSourceWhitelist = new LinkedHashMap<String, String[]>()
++
++        def rawWhitelist = new URL(aptSourceWhitelistURI).getText()
++        def whitelistJson = new JsonSlurper() \
++            .parseText(String.valueOf(rawWhitelist))
++
++        for (Object item : whitelistJson) {
++            this.aptSourceWhitelist.put(
++                item.get("alias"),
++                [item.get("key_url"),
++                 item.get("sourceline")] as String[]
++            )
++        }
+     }
+ 
+     /**
+-     * Load a ".travis.yml" file from the given path in the current workspace and execute it as best as we can.
++     * Load a ".travis.yml" file from the given path in the current workspace
++     * and execute it as best as we can.
+      * Errors out if run outside a node { } block.
+      *
+      * @param path The path to the file in question.
+-     * @param labelExpr Optional label expression to run parallel "matrix" executions on. If not given, will
+-     *                    just run on 'node { }'.
+-     * @param timeout Optional timeout, in minutes, for individual steps - defaults to 50 minutes, like travis-ci.org.
++     * @param labelExpr Optional label expression to run parallel "matrix"
++     *                  executions on. If not given, will
++     *                  just run on 'node { }'.
++     * @param timeout Optional timeout, in minutes, for individual steps.
++     *                Defaults to 50 minutes, like travis-ci.org.
+      */
+-    public void call(String path, String labelExpr = null, Integer timeout = 50, scm = null) {
++    public void call(String path, String labelExpr = null,
++                     Integer timeout = 50, scm = null) {
+         Map<String, Object> travisSteps = null
+         String label = null
+ 
+@@ -86,7 +111,6 @@
+             travisSteps = readAndConvertTravis(travisFile)
+             travisSteps.put("scm", thisScm)
+ 
+-
+             label = null
+             if (travisSteps.containsKey("dist")) {
+                 label = travisSteps.get("dist").toString()
+@@ -112,15 +136,19 @@
+                 lang = languages \
+                     .get(travisSteps.get("language"))
+                     .newInstance()
+-                lang.call(script, travisSteps, envMatrix)
++            } else {
++                lang = new NoSpecificLanguage()
+             }
++            lang.call(script, travisSteps, envMatrix)
+ 
+             lang.decorateClosure({
+                 script.sh("chmod +x -R ./")
+             })
+ 
+             if (travisSteps.containsKey("services")) {
+-                def servicesList = getYamlStringOrListAsList(travisSteps.get("services"))
++                def servicesList = \
++                    getYamlStringOrListAsList(travisSteps.get("services"))
++
+                 for (Object service : servicesList) {
+                     if (!services.containsKey(String.valueOf(service))) {
+                         continue
+@@ -160,10 +188,13 @@
+             // script.stage "Parallel Travis Execution"
+             // script.parallel parallelInvocations
+ 
++            int envCounter = 0
+             for (Map<String, String> env : envCombos) {
+                 script.echo("Running with env: " + env.toString())
+-                script.withEnv(env) {
+-                    executeScript(travisSteps, false, timeout).call()
++                script.stage(String.format("env#%d", ++envCounter)) {
++                    script.withEnv(env) {
++                        executeScript(travisSteps, false, timeout).call()
++                    }
+                 }
+             }
+ 
+@@ -231,10 +262,6 @@
+ 
+     private def addonsApt(apt, boolean inParallel, int timeout) {
+         if (apt.containsKey("sources")) {
+-            if (!inParallel) {
+-                script.stage "Addons APT - Sources"
+-            }
+-
+             def sources = apt.get("sources")
+ 
+             for (def source : sources) {
+@@ -242,8 +269,13 @@
+                 String key_url = null
+ 
+                 if (source instanceof String) {
+-                    // Get sourceline and key_url from whitelist
+-                    script.echo 'XABLAU!'
++                    script.echo("This will fail your build if repo has no ppc64le packages.")
++                    if (!aptSourceWhitelist.containsKey(source as Object)) {
++                        script.error("Don't know source " + source)
++                    }
++                    String[] src = aptSourceWhitelist.get(source)
++                    key_url = src[0]
++                    sourceline = src[1]
+                 } else {
+                     if (source.containsKey("sourceline")) {
+                         sourceline = (String) source.get("sourceline")
+@@ -255,7 +287,7 @@
+ 
+                 if (key_url != null) {
+                     script.timeout(timeout) {
+-                        script.sh("curl " + key_url + " | sudo apt-key add ")
++                        script.sh("curl " + key_url + " | sudo apt-key add - ")
+                     }
+                 }
+                 if (sourceline != null) {
+@@ -274,10 +306,6 @@
+         }
+ 
+         if (apt.containsKey("packages")) {
+-            if (!inParallel) {
+-                script.stage "Addons APT - Packages"
+-            }
+-
+             ArrayList<String> packages = (ArrayList<String>) apt.get("packages")
+ 
+             script.timeout(timeout) {
+@@ -291,21 +319,28 @@
+ 
+     private def executeStage(Map<String, Object> travisSteps, String stage,
+                              boolean inParallel, Integer timeout) {
++        def steps
+         if (travisSteps.containsKey(stage)) {
+-            if (!inParallel)
+-                script.stage stage
+-            lang.decorateClosure({
+-                getSteps(travisSteps.get(stage), timeout)
+-            })
++            steps = getYamlStringOrListAsList(travisSteps.get(stage))
++        } else {
++            return
++        }
++
++        for (def cmd in steps) {
++            lang.executeStep(cmd.toString(), timeout)
+         }
+     }
++
+     /**
+-     * Takes a Travis "step", which could either be a String or an ArrayList of Strings, and returns an array of
+-     * Pipeline "sh" steps inside a closure to execute those "steps".
++     * Takes a Travis "step", which could either be a String or an ArrayList of
++     * Strings, and returns an array of Pipeline "sh" steps inside a closure to
++     * execute those "steps".
+      *
+-     * @param travisStep The value for a Travis "step" - could be either a single String or an ArrayList of Strings.
++     * @param travisStep The value for a Travis "step" - could be either a
++     *                   single String or an ArrayList of Strings.
+      * @param timeout Timeout in minutes for execution of this step.
+-     * @return A closure containing a possibly-empty array of Pipeline "sh" steps.
++     * @return A closure containing a possibly-empty array of Pipeline "sh"
++     *         steps.
+      */
+     private def getSteps(travisStep, Integer timeout) {
+         def actualSteps = []
+@@ -335,6 +370,8 @@
+             return [yamlEntry]
+         } else if (yamlEntry instanceof ArrayList) {
+             return yamlEntry
++        } else if (yamlEntry instanceof Boolean) {
++            return [String.valueOf(yamlEntry)]
+         } else {
+             throw new IllegalArgumentException("Bad format of YAML - found ${yamlEntry.class} when expecting either 'String' or 'ArrayList'")
+         }
+@@ -353,7 +390,13 @@
+         if (travisEnv instanceof Map) {
+             rawEnvEntries = []
+             for (Map.Entry<?, ?> e : travisEnv.entrySet()) {
+-                rawEnvEntries += getYamlStringOrListAsList(e.getValue())
++                def entryValue = e.getValue()
++
++                if (entryValue instanceof Map) {
++                    rawEnvEntries += [entryValue]
++                } else {
++                    rawEnvEntries += getYamlStringOrListAsList(entryValue)
++                }
+             }
+         } else {
+             rawEnvEntries = getYamlStringOrListAsList(travisEnv)
+@@ -362,15 +405,21 @@
+         for (def entry in rawEnvEntries.toSet()) {
+             if (entry instanceof String) {
+                 def cleanedString = stripLeadingTrailingQuotes(entry)
+-                def stringParts = cleanedString.split("=")
++                def eqPos = cleanedString.indexOf('=')
++
++                if (eqPos != -1) {
++                    String envKey = cleanedString.substring(0, eqPos)
++                    String envValue = cleanedString.substring(eqPos + 1)
+ 
+-                if (stringParts != null && stringParts.size() == 2) {
+-                    envMatrix.put(stringParts[0], stripLeadingTrailingQuotes(stringParts[1]))
++                    script.echo(envKey + ": " + envValue)
++
++                    envMatrix.put(envKey, stripLeadingTrailingQuotes(envValue))
+                 }
+             } else if (entry instanceof Map) {
+                 def entrySet = entry.entrySet()
+                 for (Map.Entry e : entrySet) {
+-                    envMatrix.put(e.getKey(), stripLeadingTrailingQuotes(e.getValue()))
++                    envMatrix.put(e.getKey(),
++                                  stripLeadingTrailingQuotes(e.getValue()))
+                 }
+             }
+         }
+@@ -435,10 +484,29 @@
+     interface LanguageStrategy {
+ 
+         void call(CpsScript script, Map<String, Object> travisYml, TravisEnvMatrix envMatrix)
+-        void decorateClosure(Closure action)
++        void executeStep(String cmd, int timeout)
+ 
+     }
+ 
++    private class NoSpecificLanguage implements LanguageStrategy, Serializable {
++
++        private CpsScript script
++
++        void call(CpsScript script, Map<String, Object> travisYml, TravisEnvMatrix envMatrix) {
++            this.script = script
++        }
++
++        void decorateClosure(Closure action) {
++            action.call()
++        }
++
++        void executeStep(String cmd, int timeout) {
++            script.timeout(time: timeout, unit: 'MINUTES') {
++                script.sh(cmd)
++            }
++        }
++    }
++
+     private class LanguageGoEnvironment implements LanguageStrategy, Serializable {
+         private static final String golangBinariesRepositoryURL = "https://storage.googleapis.com/golang/"
+         private static final String gimmeVersionsPrefix = "/var/gimme/versions"
+@@ -478,6 +546,14 @@
+             }
+         }
+ 
++        void executeStep(String cmd, int timeout) {
++            script.dir(projPath) {
++                script.timeout(time: timeout, unit: 'MINUTES') {
++                    script.sh(cmd)
++                }
++            }
++        }
++
+         private void goPath(CpsScript script, TravisEnvMatrix envMatrix,
+                             Map<String, Object> travisYml) {
+             gopath = "${script.env.WORKSPACE}/../gopath"
+@@ -488,13 +564,18 @@
+             script.sh("mkdir -p " + gobin)
+             envMatrix.put("GOBIN", gobin)
+ 
+-            URL scmURL = new URL(travisYml.get('scm').get('url'))
+-            String host = scmURL.getHost()
+-            String[] path = scmURL.getPath().split('/')
+-            String user = path[1]
+-            String repo = path[2].replaceFirst("\\.git", "")
+-            String projParentPath = gopath + "/src/" + host + "/" + user
+-            String projPath = projParentPath + "/" + repo
++            String projPath = gopath + "/src/"
++            if (travisYml.containsKey('go_import_path')) {
++                projPath += travisYml.get('go_import_path').toString()
++            } else {
++                URL scmURL = new URL(travisYml.get('scm').get('url'))
++                String host = scmURL.getHost()
++                String[] path = scmURL.getPath().split('/')
++                String user = path[1]
++                String repo = path[2].replaceFirst("\\.git", "")
++
++                projPath += String.format("%s/%s/%s", host, user, repo)
++            }
+ 
+             script.sh("mkdir -p " + projPath)
+             script.sh("rsync -az ${script.env.WORKSPACE}/* " + projPath)

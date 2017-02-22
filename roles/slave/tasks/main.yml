@@ -49,6 +49,8 @@
 #     state: started
 #     ports:
 #       - "{{ debian.ports[ item|int ] }}:22"
+    # volumes:
+    #   - "/var/run/docker.sock:/var/run/docker.sock"
 #   with_sequence: start=0 count={{ debian.ports|length }}
 
 # - name: debian_jessie - counting containers
@@ -83,6 +85,10 @@
     owner={{ ansible_user }}
     mode=0644
 
+- name: Capture host docker version
+  shell: docker version --format "{{ '{{' }}.Server.Version {{ '}}' }}"
+  register: docker_version
+
 - name: ubuntu_14_04 - build image
   docker_image: >
     name={{ ubuntu.trusty.img_name }}
@@ -97,6 +103,8 @@
     state: started
     ports:
       - "{{ ubuntu.trusty.ports[ item|int ] }}:22"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
   with_sequence: start=0 count={{ ubuntu.trusty.ports|length }}
 
 - name: ubuntu_14_04 - counting containers
@@ -145,6 +153,8 @@
     state: started
     ports:
       - "{{ ubuntu.xenial.ports[ item|int ] }}:22"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
   with_sequence: start=0 count={{ ubuntu.xenial.ports|length }}
 
 - name: ubuntu_16_04 - counting containers
