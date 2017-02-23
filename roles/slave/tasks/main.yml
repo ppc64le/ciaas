@@ -49,6 +49,8 @@
 #     state: started
 #     ports:
 #       - "{{ debian.ports[ item|int ] }}:22"
+#       memory_reservation: 500MB
+#       memory: 4GB
     # volumes:
     #   - "/var/run/docker.sock:/var/run/docker.sock"
 #   with_sequence: start=0 count={{ debian.ports|length }}
@@ -105,6 +107,8 @@
       - "{{ ubuntu.trusty.ports[ item|int ] }}:22"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
+    memory_reservation: 500MB
+    memory: 4GB
   with_sequence: start=0 count={{ ubuntu.trusty.ports|length }}
 
 - name: ubuntu_14_04 - counting containers
@@ -155,6 +159,8 @@
       - "{{ ubuntu.xenial.ports[ item|int ] }}:22"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
+    memory_reservation: 500MB
+    memory: 4GB
   with_sequence: start=0 count={{ ubuntu.xenial.ports|length }}
 
 - name: ubuntu_16_04 - counting containers

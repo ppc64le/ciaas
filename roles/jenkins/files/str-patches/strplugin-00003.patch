@@ -1,7 +1,14 @@
 diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy simple-travis-runner-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy
 --- original-str-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-02-07 16:30:21.677406831 -0200
-+++ simple-travis-runner-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-02-22 10:52:54.827448106 -0300
-@@ -40,12 +40,22 @@
++++ simple-travis-runner-plugin/src/main/resources/org/jenkinsci/plugins/simpletravisrunner/SimpleTravisRunner.groovy	2017-02-23 14:58:10.787176147 -0300
+@@ -34,18 +34,28 @@
+ 
+ class SimpleTravisRunner implements Serializable {
+     private static final String aptSourceWhitelistURI = "https://raw.githubusercontent.com/travis-ci/apt-source-whitelist/master/ubuntu.json"
+-    private static final Map<String, String> defaultEnv = [
++    private static Map<String, String> defaultEnv = [
+         TRAVIS_OS_NAME: ["linux"],
+     ]
      private static final def languages = [
          go: LanguageGoEnvironment,
      ]
@@ -76,7 +83,16 @@ diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jen
              label = null
              if (travisSteps.containsKey("dist")) {
                  label = travisSteps.get("dist").toString()
-@@ -112,15 +136,19 @@
+@@ -98,6 +122,8 @@
+         }
+ 
+         script.node(label) {
++            defaultEnv.put('TRAVIS_BUILD_DIR', [script.env.WORKSPACE])
++
+             TravisEnvMatrix envMatrix = new TravisEnvMatrix(defaultEnv, script)
+             def envCombos
+ 
+@@ -112,15 +138,19 @@
                  lang = languages \
                      .get(travisSteps.get("language"))
                      .newInstance()
@@ -98,7 +114,7 @@ diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jen
                  for (Object service : servicesList) {
                      if (!services.containsKey(String.valueOf(service))) {
                          continue
-@@ -160,10 +188,13 @@
+@@ -160,10 +190,13 @@
              // script.stage "Parallel Travis Execution"
              // script.parallel parallelInvocations
  
@@ -114,7 +130,7 @@ diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jen
                  }
              }
  
-@@ -231,10 +262,6 @@
+@@ -231,10 +264,6 @@
  
      private def addonsApt(apt, boolean inParallel, int timeout) {
          if (apt.containsKey("sources")) {
@@ -125,7 +141,7 @@ diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jen
              def sources = apt.get("sources")
  
              for (def source : sources) {
-@@ -242,8 +269,13 @@
+@@ -242,8 +271,13 @@
                  String key_url = null
  
                  if (source instanceof String) {
@@ -141,7 +157,7 @@ diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jen
                  } else {
                      if (source.containsKey("sourceline")) {
                          sourceline = (String) source.get("sourceline")
-@@ -255,7 +287,7 @@
+@@ -255,7 +289,7 @@
  
                  if (key_url != null) {
                      script.timeout(timeout) {
@@ -150,7 +166,7 @@ diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jen
                      }
                  }
                  if (sourceline != null) {
-@@ -274,10 +306,6 @@
+@@ -274,10 +308,6 @@
          }
  
          if (apt.containsKey("packages")) {
@@ -161,7 +177,7 @@ diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jen
              ArrayList<String> packages = (ArrayList<String>) apt.get("packages")
  
              script.timeout(timeout) {
-@@ -291,21 +319,28 @@
+@@ -291,21 +321,28 @@
  
      private def executeStage(Map<String, Object> travisSteps, String stage,
                               boolean inParallel, Integer timeout) {
@@ -199,7 +215,7 @@ diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jen
       */
      private def getSteps(travisStep, Integer timeout) {
          def actualSteps = []
-@@ -335,6 +370,8 @@
+@@ -335,6 +372,8 @@
              return [yamlEntry]
          } else if (yamlEntry instanceof ArrayList) {
              return yamlEntry
@@ -208,7 +224,7 @@ diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jen
          } else {
              throw new IllegalArgumentException("Bad format of YAML - found ${yamlEntry.class} when expecting either 'String' or 'ArrayList'")
          }
-@@ -353,7 +390,13 @@
+@@ -353,7 +392,13 @@
          if (travisEnv instanceof Map) {
              rawEnvEntries = []
              for (Map.Entry<?, ?> e : travisEnv.entrySet()) {
@@ -223,20 +239,18 @@ diff -ruN -x '.git*' -x 'target*' original-str-plugin/src/main/resources/org/jen
              }
          } else {
              rawEnvEntries = getYamlStringOrListAsList(travisEnv)
-@@ -362,15 +405,21 @@
+@@ -362,15 +407,19 @@
          for (def entry in rawEnvEntries.toSet()) {
              if (entry instanceof String) {
                  def cleanedString = stripLeadingTrailingQuotes(entry)
 -                def stringParts = cleanedString.split("=")
 +                def eqPos = cleanedString.indexOf('=')
-+
-+                if (eqPos != -1) {
-+                    String envKey = cleanedString.substring(0, eqPos)
-+                    String envValue = cleanedString.substring(eqPos + 1)
  
 -                if (stringParts != null && stringParts.size() == 2) {
 -                    envMatrix.put(stringParts[0], stripLeadingTrailingQuotes(stringParts[1]))
-+                    script.echo(envKey + ": " + envValue)
++                if (eqPos != -1) {
++                    String envKey = cleanedString.substring(0, eqPos)
++                    String envValue = cleanedString.substring(eqPos + 1)
 +
 +                    envMatrix.put(envKey, stripLeadingTrailingQuotes(envValue))
                  }
